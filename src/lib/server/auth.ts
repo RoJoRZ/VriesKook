@@ -36,12 +36,16 @@ function sameBytes(first: Uint8Array, second: Uint8Array) {
 }
 
 export async function passwordIsValid(password: string, stored?: string) {
-  const match = stored?.match(/^pbkdf2-sha256\$(\d+)\$([^$]+)\$([^$]+)$/);
+  const match = passwordHashMatch(stored);
   if (!match) return false;
   const [, iterationsText, salt, expected] = match;
   const key = await crypto.subtle.importKey('raw', encoder.encode(password), 'PBKDF2', false, ['deriveBits']);
   const derived = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: encoder.encode(salt), iterations: Number(iterationsText) }, key, 256);
   return sameBytes(new Uint8Array(derived), base64ToBytes(expected));
+}
+
+export function passwordHashMatch(stored?: string) {
+  return stored?.match(/^pbkdf2-sha256\$(\d+)\$([^$]+)\$([^$]+)$/);
 }
 
 function cookieValue(header: string | null, name: string) {
