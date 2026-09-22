@@ -1,8 +1,8 @@
 # HelpMenu — Functioneel document
 
-**Versie:** 1.0 — definitieve functionele basis
+**Versie:** 1.1 — functionele basis en eerste release
 **Datum:** 22 september 2026
-**Status:** vastgesteld op basis van de functionele inventarisatie en de schetsen in `Ontwerp/`.
+**Status:** vastgesteld; de eerste online release is in gebruik.
 
 ## 1. Doel
 
@@ -34,7 +34,7 @@ De schermschetsen onderscheiden hiervoor een ingang **Vers** en een ingang **Vri
 
 Na het kiezen van een gerecht uit **Vers** of **Vriezer** krijgt de gebruiker twee acties: **nu boeken** of **toevoegen aan planner**. Bij een gerecht uit de vriezer betekent ‘nu boeken’ dat het als ‘gegeten uit de vriezer’ wordt geboekt. Een vriesgerecht kan alleen aan de planner worden toegevoegd als er nog een vrije portie beschikbaar is.
 
-Een gerecht dat niet meer gebruikt wordt, kan worden gearchiveerd. Het verdwijnt dan uit nieuwe keuzes, maar blijft zichtbaar bij bestaande plannerregels, eetgeschiedenis en vriezervoorraad.
+Een gerecht dat niet meer gebruikt wordt, kan worden verwijderd. Verwijderen is alleen mogelijk wanneer het gerecht niet voorkomt in de vriezervoorraad, planner, eetgeschiedenis of een etentje met vrienden. Zo blijft bestaande historie altijd begrijpelijk.
 
 Volledige recepten, ingrediëntenlijsten en bereidingsinstructies zijn nog niet als vereiste besproken.
 
@@ -63,7 +63,7 @@ Bij het boeken wordt vastgelegd wat er met de maaltijd is gebeurd:
 
 Wanneer een geplande maaltijd als gegeten wordt geboekt, verdwijnt deze uit de actieve planner en blijft hij zichtbaar in de eetgeschiedenis. De planner toont zo alleen maaltijden die nog gepland zijn. Een maaltijd kiezen of plannen betekent niet dat deze al gegeten is.
 
-Een boeking kan achteraf worden gewijzigd of verwijderd. De app herstelt daarbij automatisch de gekoppelde eetgeschiedenis en voorraadmutatie; verwijderen vraagt eerst om bevestiging.
+Het wijzigen of verwijderen van een bestaande boeking, met herstel van de gekoppelde voorraadmutatie, is een volgende uitbreiding. De eerste online release ondersteunt het vastleggen van nieuwe boekingen en voorraadmutaties.
 
 ## 5. Eetgeschiedenis
 
@@ -115,7 +115,7 @@ De ingang **Nieuw gerecht** opent een invoerscherm met:
 - Optionele kenmerken uit de gedeelde kenmerkenlijst.
 - Optionele calorieën per 100 gram.
 
-Na het aanmaken kunnen de gegevens van een gerecht worden aangepast, waaronder later toegevoegde calorie-informatie. De foto kan later worden toegevoegd, vervangen of verwijderd. De gedeelde kenmerkenlijst kan door de gebruikers worden beheerd.
+De eerste online release ondersteunt het aanmaken van een gerecht met optionele foto. Een bewerkscherm voor bestaande gerechten en beheer van de kenmerkenlijst zijn bewuste vervolgstappen.
 
 ## 9. Gebruiksgemak en apparaten
 

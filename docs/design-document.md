@@ -1,8 +1,8 @@
 # HelpMenu — Design document
 
-**Versie:** 1.0  
+**Versie:** 1.1
 **Datum:** 22 september 2026  
-**Status:** vastgesteld — gekozen ontwerprichting: **Vandaag eerst**
+**Status:** vastgesteld — gekozen ontwerprichting: **Vandaag eerst**; eerste online release in gebruik.
 
 ## 1. Doel en uitgangspunt
 
@@ -106,11 +106,11 @@ Na een geslaagde opslag toont de app een korte bevestiging met een herstelactie 
 | Uit de vriezer | Maaltijd gebruikt een voorraadbatch. | Planner, boeking en geschiedenis. |
 | Gereserveerd | Eén portie is tijdelijk aan een plannerregel gekoppeld. | Voorraadregel en planner. |
 | Eerst opmaken | Oudste beschikbare vriesbatch. | Vandaag en Vriezer. |
-| Gearchiveerd | Niet meer nieuw te kiezen, historie blijft intact. | Detail en beheerscherm. |
+| Verwijderen | Alleen mogelijk wanneer het gerecht niet in voorraad, planner of historie voorkomt. | Gerechtenlijst. |
 
 ### Wijzigen en verwijderen
 
-Een wijziging staat onder `Meer opties` op het betreffende detail of in de eetgeschiedenis. Verwijderen vraagt altijd om bevestiging en noemt het gevolg, bijvoorbeeld: “De boeking verdwijnt en 1 portie Rendang wordt weer vrijgegeven.”
+Een gerecht verwijderen vraagt altijd om bevestiging. De eerste release blokkeert verwijderen wanneer het gerecht nog in voorraad, planner, eetgeschiedenis of een etentje voorkomt, zodat gekoppelde gegevens niet beschadigen. Het wijzigen of verwijderen van boekingen is een vervolgstap.
 
 ## 5. De zeven schermen
 

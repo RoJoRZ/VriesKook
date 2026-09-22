@@ -1,14 +1,16 @@
 # HelpMenu — Technisch ontwerp
 
-**Versie:** 0.2 — gratis cloudvoorstel  
+**Versie:** 1.0 — huidige eerste release
 **Datum:** 22 september 2026  
-**Status:** voorstel, gebaseerd op het functioneel ontwerp versie 1.0.
+**Status:** online op Cloudflare Workers; dit document onderscheidt de huidige implementatie van de beoogde vervolgstappen.
 
 ## 1. Besluitvoorstel
 
 Voor HelpMenu is het gratis Cloudflare-platform een goede technische keuze. De app heeft twee gebruikers, weinig gegevens, één foto per gerecht en eenvoudige boekingen. Dat blijft ruim binnen de gratis limieten, zonder eigen server, database-abonnement of maandelijkse hostingkosten.
 
-De voorgestelde oplossing is een **installerenbare webapp (PWA)** met een kleine API op Cloudflare Workers, een D1-database en R2 voor foto's. De database en foto's worden vanaf het begin op de EU-jurisdictie ingesteld.
+De huidige oplossing is een **installerenbare webapp (PWA)** met een kleine API op Cloudflare Workers en een D1-database. De D1-database en de al aangemaakte R2-bucket hebben EU-jurisdictie. R2 is voorbereid voor foto's, maar wordt nog niet gebruikt voor uploads.
+
+De online productieversie is beschikbaar op `https://helpmenu.roriapps.workers.dev`.
 
 De betaalde VPS-oplossing blijft een goed alternatief wanneer volledige controle over de server belangrijker wordt dan nul euro aan vaste kosten. Zie hoofdstuk 11.
 
@@ -58,13 +60,21 @@ Bronnen: [Workers-prijzen en limieten](https://developers.cloudflare.com/workers
 | Gebruikersinterface | SvelteKit met TypeScript, statisch gebouwde PWA | Snel, lichtgewicht en installabel op alle gewenste apparaten. |
 | API | Cloudflare Worker met TypeScript | Geen serverproces of container nodig; eenvoudig te implementeren naast de PWA. |
 | Database | Cloudflare D1, met EU-jurisdictie | Relationeel, SQLite-compatibel en gratis ruim voldoende. |
-| Foto's | Cloudflare R2, met EU-jurisdictie | Bestandsopslag zonder aparte mediaservice; gratis eerste 10 GB. |
-| Database-laag | D1 prepared statements en versiebeheer voor SQL-migraties | Veilige queries en controleerbare schemawijzigingen. |
-| Aanmelding | Eén gedeeld account met PBKDF2-SHA-256-wachtwoordhash als Workers-secret en beveiligde sessiecookie in D1 | Sluit aan op de gedeelde login uit het functioneel ontwerp; het wachtwoord komt nooit in Git of D1 terecht. |
+| Foto's | In de eerste release als lokale afbeeldingsdata in de gedeelde staat; R2 is al gebonden voor een latere uploadroute | De foto kan via de systeemkiezer worden gekozen. Voor veel of grote foto's is verplaatsing naar R2 nodig. |
+| Database-laag | D1 prepared statements en versiebeheer voor SQL-migraties | De app gebruikt nu één gedeelde JSON-staat; de genormaliseerde tabellen zijn voorbereid voor een volgende versie. |
+| Aanmelding | Eén gedeeld account met PBKDF2-SHA-256-hash en beveiligde sessiecookie in D1 | De initiële hash staat als Workers-secret. Na een wachtwoordwijziging staat uitsluitend de nieuwe hash in D1; het wachtwoord zelf komt nooit in Git of D1 terecht. |
 | Uitrollen | Wrangler vanaf GitHub Actions of lokale ontwikkelcomputer | Herhaalbare deployment zonder serverbeheer. |
 | Back-up | D1 Time Travel plus regelmatige export naar eigen Mac/NAS | Herstelbaar en geen betaalde back-updienst vereist. |
 
 ## 5. Gegevensontwerp
+
+### Huidige eerste release
+
+De online app bewaart de gedeelde gegevens als één JSON-document in `app_state` (maximaal 2 MB). Daarnaast gebruikt zij `sessions` voor sessietokens en `auth_credentials` voor de hash na een wachtwoordwijziging. Dit houdt de eerste release overzichtelijk, maar betekent dat gelijktijdige wijzigingen op twee apparaten een *laatste wijziging wint*-effect kunnen hebben. Gebruik de app daarom voorlopig niet gelijktijdig voor verschillende wijzigingen.
+
+De normale tabellen uit de eerste migratie blijven als voorbereide structuur aanwezig. Ze zijn nog niet de actieve gegevensbron; de volgende versie kan hierop overstappen voor fijnmazige validatie en veilige gelijktijdige voorraadreserveringen.
+
+### Beoogde genormaliseerde vervolgversie
 
 De database gebruikt interne unieke identifiers. Eet- en invriesdatums worden als kalenderdatum opgeslagen; de app gebruikt `Europe/Amsterdam` voor invoer en weergave.
 
@@ -87,14 +97,14 @@ De database gebruikt interne unieke identifiers. Eet- en invriesdatums worden al
 - Een plannerregel uit de vriezer reserveert precies één portie van de oudste vrije voorraadregel.
 - Een boeking ‘gegeten uit de vriezer’ verbruikt die reservering. Zonder plannerregel kiest de API de oudste vrije voorraadregel.
 - Wijzigen of verwijderen van een boeking maakt een tegengestelde voorraadmutatie.
-- De Worker verwerkt alle gerelateerde statements in één D1-batchtransactie. Als één stap mislukt, draait D1 de hele batch terug. Daardoor kunnen twee apparaten niet dezelfde laatste portie tegelijk gebruiken.
+- In de genormaliseerde vervolgversie verwerkt de Worker alle gerelateerde statements in één D1-batchtransactie. Als één stap mislukt, draait D1 de hele batch terug. Daardoor kunnen twee apparaten niet dezelfde laatste portie tegelijk gebruiken.
 - Een verse boeking met zowel `gegeten` als `ingevroren` maakt in dezelfde transactie een eetgeschiedenisregel én een voorraadbatch met de opgegeven porties en personen per portie. Een boeking uit de vriezer is hiervan gescheiden en boekt alleen de gekoppelde batch af.
 
 ## 6. Foto's
 
-De PWA gebruikt een standaard bestandsinvoer met `accept="image/*"`. Op iPhone opent Safari daardoor de systeemkiezer, waar de gebruiker een foto uit de Fotobibliotheek of, wanneer iOS die aanbiedt, de camera kan kiezen. De PWA verkleint de gekozen foto lokaal in de browser tot maximaal 1.600 pixels aan de langste zijde en converteert hem naar WebP of JPEG vóór upload. Dit houdt uploads klein en voorkomt zware beeldbewerking in de gratis Worker.
+De PWA gebruikt een standaard bestandsinvoer met `accept="image/*"`. Op iPhone opent Safari daardoor de systeemkiezer, waar de gebruiker een foto uit de Fotobibliotheek of, wanneer iOS die aanbiedt, de camera kan kiezen. In de eerste release wordt die foto als afbeeldingsdata in de gedeelde staat opgeslagen. Daardoor tellen foto's mee in de limiet van 2 MB voor alle gegevens samen.
 
-De Worker controleert bestandstype en maximale omvang, genereert een onvoorspelbare bestandsnaam en bewaart de foto privé in R2. Een foto wordt alleen na een geldige sessie via de Worker getoond. Per gerecht is maximaal één actuele foto toegestaan.
+De geplande R2-uitbreiding verkleint foto's lokaal, valideert type en omvang in de Worker, genereert een onvoorspelbare bestandsnaam en bewaart de foto privé in R2. Die uitbreiding is nodig voordat meerdere of grotere foto's praktisch worden.
 
 ## 7. Privacy en beveiliging
 
@@ -103,9 +113,9 @@ De Worker controleert bestandstype en maximale omvang, genereert een onvoorspelb
 - Eén gedeeld account; het wachtwoord wordt alleen als een sterke hash opgeslagen.
 - Sessiecookies zijn `HttpOnly`, `Secure` en `SameSite=Lax`.
 - De gedeelde toegang gebruikt een tijdonafhankelijke wachtwoordvergelijking en bewaart in D1 alleen een SHA-256-hash van een willekeurig sessietoken. Sessies verlopen na 30 dagen en kunnen bij uitloggen worden ingetrokken.
-- Alle invoer wordt op de Worker gevalideerd; databasequeries gebruiken parameters.
+- De app valideert de dagelijkse invoer in de browser; de API controleert aanmelding, JSON-vorm en de maximale grootte. Striktere servervalidatie per veld is een vervolgstap bij de overgang naar de genormaliseerde tabellen.
 - De app bevat geen advertenties, analytics of trackers van derden.
-- Rate limiting remt herhaalde inlogpogingen.
+- Er is in de eerste release nog geen eigen rate limiting voor inlogpogingen. Het wachtwoord moet daarom lang en uniek blijven.
 
 De database en foto-opslag kunnen dus binnen de EU blijven. Workers kunnen echter wereldwijd worden uitgevoerd en benaderen de database vanaf daar; voor deze persoonlijke app is dat aanvaardbaar. Bij een harde eis dat ook elke verwerking uitsluitend in de EU plaatsvindt, is een EU-VPS de betere keuze.
 
@@ -113,11 +123,9 @@ Bronnen: [D1-gegevenslocatie](https://developers.cloudflare.com/d1/configuration
 
 ## 8. Back-up en herstel
 
-D1 Time Travel staat standaard aan. Op het gratis plan kan een database zonder extra kosten tot zeven dagen naar een eerder moment worden teruggezet.
+D1 Time Travel en exports kunnen als hersteloptie worden gebruikt; controleer vóór een herstelactie altijd de actuele Cloudflare-retentie voor het gekozen abonnement.
 
-Daarnaast wordt minimaal maandelijks vanaf een ontwikkelcomputer een D1-export als SQL-bestand gemaakt en samen met de privé R2-foto's naar een eigen Mac of NAS gekopieerd. De export wordt versleuteld bewaard. Zo blijft migratie naar bijvoorbeeld een VPS of andere cloud mogelijk.
-
-Voor ingebruikname wordt een hersteltest uitgevoerd: een tijdelijke D1-database wordt uit de export geladen en enkele foto's worden gecontroleerd. Een D1-export en -import zijn officiële ondersteunde functies.
+Een geautomatiseerde back-up is nog niet ingericht. Maak vóór grotere wijzigingen en daarna periodiek een D1-export naar een eigen, versleutelde Mac of NAS. Dit is ook de aanbevolen manier om later naar een andere hostingoplossing te migreren.
 
 Bronnen: [D1 Time Travel](https://developers.cloudflare.com/d1/reference/time-travel/) en [D1 import/export](https://developers.cloudflare.com/d1/best-practices/import-export-data/).
 

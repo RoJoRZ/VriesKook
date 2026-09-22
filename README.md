@@ -1,49 +1,39 @@
 # HelpMenu
 
-HelpMenu helpt twee partners kiezen wat zij koken, maaltijden plannen en de vriezervoorraad bijhouden.
+HelpMenu is een gedeelde, installerenbare webapp voor het kiezen, plannen en registreren van maaltijden en het bijhouden van de vriezer.
 
-## Huidige lokale versie
+De app draait op [helpmenu.roriapps.workers.dev](https://helpmenu.roriapps.workers.dev/). Open hem op telefoon, tablet of computer en meld je aan met het gedeelde wachtwoord. Via **Wachtwoord** rechtsboven kan het wachtwoord worden gewijzigd. De browser kan de inloggegevens opslaan, zodat je niet steeds opnieuw hoeft in te loggen.
 
-De eerste werkende SvelteKit-PWA bevat alle zeven ontworpen schermen:
+## Wat zit erin
 
-- Vandaag met directe boeking, planner en FIFO-voorraadmelding;
-- Vers met zoeken, kenmerken en aan de planner toevoegen;
-- Vriezer met vrije en gereserveerde porties;
-- Planner als vrije, genummerde lijst zonder datums en met keuze Vers/Vriezer;
-- Nieuw gerecht met een naam van maximaal 20 karakters;
-- Restjes invriezen met filters voor gang en kenmerken;
-- Etentjes met vrienden.
+- Gerechten toevoegen, zoeken, filteren en veilig verwijderen.
+- Maaltijden vers of uit de vriezer boeken; bij invriezen worden porties en personen per portie opgeslagen.
+- Een vrije planner, vriesvoorraad en restjes invoeren.
+- Overzicht van etentjes met vrienden.
+- Een blauwe, mobiele PWA-interface met een gedeelde online opslag.
 
-De proefversie start met voorbeeldgegevens en bewaart wijzigingen alleen in de browser. De knop **Voorbeeldgegevens herstellen** zet deze lokale gegevens terug. Dit maakt de volledige gebruikersflow veilig lokaal testbaar voordat de gedeelde D1-opslag en aanmelding worden geactiveerd.
+De online app begint zonder voorbeeldmaaltijden. Alle ingelogde apparaten delen dezelfde gegevens.
 
-## Lokaal draaien
+## Lokaal ontwikkelen
 
-Gebruik een recente Node.js-versie en pnpm:
+Installeer een recente Node.js-versie en pnpm, en voer uit:
 
 ```bash
 pnpm install
 pnpm dev
 ```
 
-Open daarna de getoonde lokale URL. Controleer de productieachtige Cloudflare-runtime met:
-
-```bash
-pnpm build
-pnpm exec wrangler dev --local
-```
-
-## Controles
+Voor een controle vóór publicatie:
 
 ```bash
 pnpm check
 pnpm build
-pnpm cf-typegen
 ```
 
-## Cloudflare-inrichting vóór deployment
+Publiceren gebeurt met `pnpm exec wrangler deploy`. Geheimen, waaronder het initiële wachtwoordhash, horen uitsluitend als Cloudflare-secret thuis — nooit in Git.
 
-De repository bevat `wrangler.jsonc`, de D1-migratie en R2-binding. Vervang vóór een eerste deployment de tijdelijke `database_id` door de ID van een nieuw aangemaakte D1-database met EU-jurisdictie en maak de R2-bucket `helpmenu-photos` eveneens met EU-jurisdictie aan. Voeg vervolgens de gedeelde login en servergestuurde sessies toe; zet nooit wachtwoorden of andere geheimen in `wrangler.jsonc`.
+## Documentatie
 
-### Gedeelde login
-
-De online versie gebruikt één gedeeld wachtwoord. Maak lokaal een PBKDF2-hash en zet uitsluitend die hash als Cloudflare-secret `AUTH_PASSWORD_HASH`; voer het echte wachtwoord nooit in een bestand of Git-commit in. De API-routes zijn `POST /api/auth/login`, `POST /api/auth/logout` en `GET /api/auth/status`.
+- [Functioneel document](docs/functioneel-document.md)
+- [Design document](docs/design-document.md)
+- [Technisch ontwerp en bekende eerste-releasegrenzen](docs/technisch-ontwerp.md)
