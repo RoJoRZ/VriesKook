@@ -1,4 +1,4 @@
-# VriesKook — Functioneel document
+# HelpMenu — Functioneel document
 
 **Versie:** 1.0 — definitieve functionele basis
 **Datum:** 22 september 2026
@@ -6,7 +6,7 @@
 
 ## 1. Doel
 
-VriesKook helpt twee partners bij het kiezen, plannen en bijhouden van hun maaltijden. De app verzamelt bekende gerechten als inspiratie, houdt de vriezervoorraad bij en laat zien wat er daadwerkelijk gegeten is en wanneer. Daarnaast biedt de app een eenvoudig overzicht van etentjes met vrienden.
+HelpMenu helpt twee partners bij het kiezen, plannen en bijhouden van hun maaltijden. De app verzamelt bekende gerechten als inspiratie, houdt de vriezervoorraad bij en laat zien wat er daadwerkelijk gegeten is en wanneer. Daarnaast biedt de app een eenvoudig overzicht van etentjes met vrienden.
 
 Dit document beschrijft wat de app moet kunnen. Technische keuzes en de technische inrichting worden in een apart document uitgewerkt.
 
@@ -25,9 +25,9 @@ Gebruikers kunnen namen opslaan van gerechten die zij graag koken en goed kennen
 
 | Gegeven | Gewenste functie |
 |---|---|
-| Naam | Verplicht veld om het gerecht te herkennen en terug te vinden. |
+| Naam | Verplicht veld van maximaal 20 karakters om het gerecht te herkennen en terug te vinden. |
 | Gerechtstype | Verplicht veld: precies één van voorgerecht, hoofdgerecht of nagerecht. |
-| Kenmerken | Optioneel. Bijvoorbeeld rijst, pasta, aardappels, groente en vlees. Eén gerecht kan meerdere kenmerken hebben. Kenmerken worden gekozen uit een vaste, beheerbare gedeelde lijst om betrouwbaar te kunnen filteren. |
+| Kenmerken | Optioneel. Bijvoorbeeld rijst, pasta, aardappels, **stamppot**, groente en vlees. Eén gerecht kan meerdere kenmerken hebben. Kenmerken worden gekozen uit een vaste, beheerbare gedeelde lijst om betrouwbaar te kunnen filteren. |
 | Calorieën per 100 gram | Optioneel veld dat later kan worden toegevoegd of gewijzigd. In de eerste versie zijn er geen automatische voedingsberekeningen. |
 
 De schermschetsen onderscheiden hiervoor een ingang **Vers** en een ingang **Vriezer**. Beide tonen een lijst met gerechten en bieden filtering; vanuit een lijst kan een gerecht worden gekozen of de details worden geopend. Gebruikers kunnen door de gerechten bladeren en filteren op de vastgelegde kenmerken en het gerechtstype. Een concreet voorbeeld: bij het kiezen van het kenmerk ‘rijst’ verschijnen alle gerechten met dat kenmerk.
@@ -47,17 +47,19 @@ De app ondersteunt twee gelijkwaardige manieren om maaltijden te kiezen:
 
 Een weekselectie is niet gekoppeld aan vaste weekdagen. De planner toont een vrije, genummerde lijst met maximaal zeven actieve maaltijden, met een knop om maaltijden toe te voegen. Hetzelfde gerecht mag hierin meerdere keren als afzonderlijke geplande maaltijd staan. De volgorde is niet handmatig aanpasbaar. Gebruikers kunnen boodschappen doen voor hun selectie en op de dag zelf bepalen welke maaltijd zij willen eten. Voeg je een vriesgerecht toe, dan wordt de oudste beschikbare portie gereserveerd. De portie wordt pas afgeboekt bij ‘gegeten uit de vriezer’; bij verwijderen van de plannerregel komt hij weer vrij. Zijn alle porties op of gereserveerd, dan kan het gerecht niet aan de planner worden toegevoegd.
 
-De selectie moet onderscheid kunnen maken tussen vers koken en uit de vriezer eten. Gebruikers willen bijvoorbeeld een periode samenstellen met drie keer vers koken en één keer een maaltijd uit de vriezer.
+De selectie moet onderscheid kunnen maken tussen vers koken en uit de vriezer eten. Gebruikers willen bijvoorbeeld een periode samenstellen met drie keer vers koken en één keer een maaltijd uit de vriezer. Na `Maaltijd toevoegen` kiest de gebruiker daarom eerst **Vers koken** of **Uit de vriezer**; daarna volgt de passende gerechtenlijst.
 
 ### Maaltijd boeken
 
 Een maaltijd kan worden geboekt vanuit **Vers**, **Vriezer**, **Planner** en **Restjes**. Deze schermen zijn dus ingangen naar dezelfde registratie, niet afzonderlijke registraties.
 
+Bij het boeken van een verse maaltijd zijn **Gegeten** en **Ingevroren** twee onafhankelijke selecties. Ze mogen dus allebei worden aangevinkt. Wanneer beide zijn gekozen, komt de maaltijd in de eetgeschiedenis én ontstaat een voorraadbatch. De velden voor aantal porties en aantal personen per portie verschijnen alleen zodra **Ingevroren** is gekozen.
+
 Bij het boeken wordt vastgelegd wat er met de maaltijd is gebeurd:
 
 - **Gegeten:** de maaltijd komt in de eetgeschiedenis; het aantal gegeten porties wordt niet geregistreerd.
 - **Ingevroren:** het aantal in te vriezen porties wordt vastgelegd en als restjes aan de vriezervoorraad toegevoegd.
-- **Gegeten uit de vriezer:** de maaltijd komt in de eetgeschiedenis en de oudste beschikbare opgeslagen portie wordt uit de vriezervoorraad afgeboekt. Het aantal gegeten porties wordt niet vastgelegd.
+- **Gegeten uit de vriezer:** is een aparte, niet-combineerbare route; de maaltijd komt in de eetgeschiedenis en de oudste beschikbare opgeslagen portie wordt uit de vriezervoorraad afgeboekt. Het aantal gegeten porties wordt niet vastgelegd.
 
 Wanneer een geplande maaltijd als gegeten wordt geboekt, verdwijnt deze uit de actieve planner en blijft hij zichtbaar in de eetgeschiedenis. De planner toont zo alleen maaltijden die nog gepland zijn. Een maaltijd kiezen of plannen betekent niet dat deze al gegeten is.
 
@@ -77,15 +79,16 @@ Gebruikers kunnen zien welke bereide gerechten of restjes momenteel in de vrieze
 
 - Het gerecht.
 - Het aantal aanwezige, opgeslagen porties. Een opgeslagen portie is de voorraadeenheid en kan bijvoorbeeld voor één of twee personen zijn.
+- Het aantal personen waarvoor één opgeslagen portie bedoeld is. Dit wordt bij invriezen vastgelegd en blijft zichtbaar bij voorraad, reserveren en eten uit de vriezer.
 - De datum waarop de porties zijn ingevroren.
 
 Elke invriesactie maakt een afzonderlijke voorraadregel, ook wanneer hetzelfde gerecht al in de vriezer ligt. De voorraad wordt op invriesdatum gesorteerd, met de oudste regel eerst. Bij ‘gegeten uit de vriezer’ wordt de oudste regel altijd eerst afgeboekt.
 
 ### Restjes toevoegen na een maaltijd
 
-Vanuit een geboekte maaltijd kunnen gebruikers aangeven dat er porties over zijn die zij invriezen. Het gerecht wordt daarbij overgenomen; gebruikers leggen het aantal porties en de invriesdatum vast. Restjes mogen ook zonder koppeling met een eerdere boeking worden ingevroren; de gebruiker kiest dan zelf het gerecht. De schets voor **Restjes** wijst op een compact invoerscherm met maaltijd/gerecht, aantal porties en datum.
+Vanuit een geboekte maaltijd kunnen gebruikers aangeven dat er porties over zijn die zij invriezen. Het gerecht wordt daarbij overgenomen; gebruikers leggen het aantal porties, het aantal personen per portie en de invriesdatum vast. Restjes mogen ook zonder koppeling met een eerdere boeking worden ingevroren; de gebruiker kiest dan zelf het gerecht. Boven de gerechtkiezer staan filters voor **gang** en **kenmerken**, zodat ook een lange gerechtenlijst snel te verfijnen is. De schets voor **Restjes** wijst op een compact invoerscherm met maaltijd/gerecht, filters, aantal porties, aantal personen per portie en datum.
 
-**Voorbeeld:** na het eten blijven twee porties over. De gebruiker voegt vanuit die maaltijd twee porties toe aan de vriezervoorraad, met de datum waarop deze de vriezer in gaan.
+**Voorbeeld:** na het eten blijven twee porties voor elk twee personen over. De gebruiker voegt vanuit die maaltijd twee porties toe aan de vriezervoorraad, met de datum waarop deze de vriezer in gaan. Bij later gebruik staat zichtbaar dat één gekozen portie voor twee personen is.
 
 De voorraad moet actueel worden gehouden wanneer porties eruit worden gehaald. Bij ‘gegeten uit de vriezer’ wordt de oudste beschikbare opgeslagen portie afgeboekt.
 
@@ -105,8 +108,8 @@ Dit is een eenvoudig overzicht met een invoerscherm voor wie, wat en wanneer. Bi
 
 De ingang **Nieuw gerecht** opent een invoerscherm met:
 
-- Maximaal één optionele foto van het gerecht.
-- Een verplichte naam.
+- Maximaal één optionele foto van het gerecht. Op iPhone en Android opent de gewone systeemkiezer, zodat de gebruiker een foto uit de fotobibliotheek of — als het apparaat die keuze biedt — rechtstreeks via de camera kan kiezen.
+- Een verplichte naam van maximaal 20 karakters.
 - Een optionele korte toelichting of omschrijving.
 - Een verplicht gerechtstype/gang.
 - Optionele kenmerken uit de gedeelde kenmerkenlijst.
