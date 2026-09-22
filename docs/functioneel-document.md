@@ -34,7 +34,7 @@ De schermschetsen onderscheiden hiervoor een ingang **Vers** en een ingang **Vri
 
 Na het kiezen van een gerecht uit **Vers** of **Vriezer** krijgt de gebruiker twee acties: **nu boeken** of **toevoegen aan planner**. Bij een gerecht uit de vriezer betekent ‘nu boeken’ dat het als ‘gegeten uit de vriezer’ wordt geboekt. Een vriesgerecht kan alleen aan de planner worden toegevoegd als er nog een vrije portie beschikbaar is.
 
-Een gerecht dat niet meer gebruikt wordt, kan worden verwijderd. Verwijderen is alleen mogelijk wanneer het gerecht niet voorkomt in de vriezervoorraad, planner, eetgeschiedenis of een etentje met vrienden. Zo blijft bestaande historie altijd begrijpelijk.
+Een gerecht kan worden verwijderd zodra het niet meer in de actieve planner staat en er geen porties van in de vriezer liggen. Staat het nog in eerdere boekingen of etentjes, dan verdwijnt het uit de gerechtenlijst maar blijft de naam voor die historie bewaard.
 
 Volledige recepten, ingrediëntenlijsten en bereidingsinstructies zijn nog niet als vereiste besproken.
 
@@ -117,7 +117,7 @@ De ingang **Nieuw gerecht** opent een invoerscherm met:
 - Optionele kenmerken uit de gedeelde kenmerkenlijst.
 - Optionele calorieën per 100 gram.
 
-De eerste online release ondersteunt het aanmaken van een gerecht met optionele foto. Een bewerkscherm voor bestaande gerechten en beheer van de kenmerkenlijst zijn bewuste vervolgstappen.
+Via **Wijzigen** in de gerechtenlijst kunnen gebruikers de naam, beschrijving, foto, kenmerken, gang en calorieën per 100 gram aanpassen. De foto kan ook worden vervangen of verwijderd. Beheer van de vaste kenmerkenlijst is een vervolgstap.
 
 ## 9. Gebruiksgemak en apparaten
 

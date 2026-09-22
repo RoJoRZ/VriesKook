@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import type { Course, Dish, FreezerBatch, FriendDinner, PlannerEntry, Screen, Source } from '$lib/domain';
   import { formatDate, today, uid } from '$lib/domain';
+  import { dishRemovalBlocker, removeDishPreservingHistory } from '$lib/dish-lifecycle';
   import { seedBatches, seedBookings, seedDishes, seedFriendDinners, seedPlanner } from '$lib/seed';
 
   const storageKey = 'helpmenu-local-v1';
@@ -35,6 +36,7 @@
   let newDishCalories = '';
   let newDishTags: string[] = [];
   let newDishPhoto = '';
+  let editingDishId: string | null = null;
   let dinnerDate = today();
   let dinnerPeople = '';
   let dinnerNote = '';
@@ -259,8 +261,30 @@
   }
 
   function navigate(next: Screen) {
+    if (next === 'nieuw') resetDishForm();
     screen = next;
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function resetDishForm() {
+    editingDishId = null;
+    newDishName = '';
+    newDishCourse = 'Hoofdgerecht';
+    newDishDescription = '';
+    newDishCalories = '';
+    newDishTags = [];
+    newDishPhoto = '';
+  }
+
+  function editDish(dish: Dish) {
+    editingDishId = dish.id;
+    newDishName = dish.name;
+    newDishCourse = dish.course;
+    newDishDescription = dish.description ?? '';
+    newDishCalories = dish.calories === undefined ? '' : String(dish.calories);
+    newDishTags = [...dish.tags];
+    newDishPhoto = dish.photoData ?? '';
+    navigate('bewerken');
   }
 
   function addToPlanner(dish: Dish, source: Source, batch?: FreezerBatch) {
@@ -320,16 +344,22 @@
     newDishTags = newDishTags.includes(tag) ? newDishTags.filter((item) => item !== tag) : [...newDishTags, tag];
   }
 
-  function saveNewDish() {
+  function saveDish() {
     const name = newDishName.trim();
     if (!name) return showToast('Vul eerst de naam van het gerecht in.');
     if (name.length > 20) return showToast('De naam van een gerecht mag maximaal 20 karakters hebben.');
+    const calories = newDishCalories === '' ? undefined : Number(newDishCalories);
+    if (calories !== undefined && (!Number.isFinite(calories) || calories < 0)) return showToast('Vul een geldig aantal calorieën in.');
     const emoji = newDishCourse === 'Nagerecht' ? '🍰' : newDishCourse === 'Voorgerecht' ? '🥣' : '🍲';
-    const dish: Dish = { id: uid('dish'), name, course: newDishCourse, tags: newDishTags, description: newDishDescription.trim() || undefined, calories: newDishCalories ? Number(newDishCalories) : undefined, emoji, photoData: newDishPhoto || undefined };
-    dishes = [...dishes, dish];
-    newDishName = ''; newDishCourse = 'Hoofdgerecht'; newDishTags = []; newDishDescription = ''; newDishCalories = ''; newDishPhoto = '';
+    const previous = editingDishId ? getDish(editingDishId) : undefined;
+    if (editingDishId && (!previous || previous.archived)) return showToast('Dit gerecht is niet meer beschikbaar. Open de gerechtenlijst opnieuw.');
+    const dish: Dish = { ...previous, id: previous?.id ?? uid('dish'), name, course: newDishCourse, tags: [...newDishTags], description: newDishDescription.trim() || undefined, calories, emoji, photoData: newDishPhoto || undefined };
+    const nextDishes = previous ? dishes.map((item) => item.id === previous.id ? dish : item) : [...dishes, dish];
+    if (JSON.stringify({ dishes: nextDishes, batches, planner, bookings, friendDinners }).length > 1_900_000) return showToast('De gedeelde opslag is bijna vol. Kies een kleinere foto.');
+    dishes = nextDishes;
+    resetDishForm();
     query = ''; activeTag = '';
-    requestConfirmation(`${dish.name} is toegevoegd aan je gerechten.`);
+    requestConfirmation(previous ? `${dish.name} is gewijzigd.` : `${dish.name} is toegevoegd aan je gerechten.`);
   }
 
   function toggleDinnerDish(dishId: string) {
@@ -344,10 +374,11 @@
   }
 
   function deleteDish(dish: Dish) {
-    const used = batches.some((batch) => batch.dishId === dish.id) || planner.some((entry) => entry.dishId === dish.id) || bookings.some((booking) => booking.dishId === dish.id) || friendDinners.some((dinner) => dinner.dishIds.includes(dish.id));
-    if (used) return showToast('Dit gerecht is nog in gebruik en kan daarom niet worden verwijderd.');
+    const blocker = dishRemovalBlocker(dish.id, planner, batches);
+    if (blocker === 'planner') return showToast('Verwijder dit gerecht eerst uit de planner.');
+    if (blocker === 'vriezer') return showToast('Gebruik de vriesporties van dit gerecht eerst op.');
     if (!window.confirm(`Weet je zeker dat je ${dish.name} wilt verwijderen?`)) return;
-    dishes = dishes.filter((item) => item.id !== dish.id);
+    dishes = removeDishPreservingHistory(dishes, dish.id, bookings, friendDinners, batches);
     requestConfirmation(`${dish.name} is verwijderd.`);
   }
 
@@ -409,7 +440,7 @@
     <button class="brand" on:click={() => navigate('vandaag')} aria-label="Naar Vandaag"><span>✦</span> HelpMenu</button>
     <nav>
       <button class:active={screen === 'vandaag'} on:click={() => navigate('vandaag')}>⌂ <span>Vandaag</span></button>
-      <button class:active={screen === 'vers'} on:click={() => navigate('vers')}>⌕ <span>Gerechten</span></button>
+      <button class:active={screen === 'vers' || screen === 'bewerken'} on:click={() => navigate('vers')}>⌕ <span>Gerechten</span></button>
       <button class:active={screen === 'vriezer'} on:click={() => navigate('vriezer')}>❄ <span>Vriezer</span></button>
       <button class:active={screen === 'planner'} on:click={() => navigate('planner')}>☷ <span>Planner</span></button>
       <button class:active={screen === 'nieuw'} on:click={() => navigate('nieuw')}>＋ <span>Nieuw gerecht</span></button>
@@ -481,7 +512,7 @@
             <article class="dish-card">
               <div class="dish-art" aria-hidden="true">{#if dish.photoData}<img src={dish.photoData} alt="" />{:else}{dish.emoji}{/if}</div>
               <div class="dish-card-content"><h2>{dish.name}</h2><p>{dish.course} · {dish.tags.join(' · ') || 'zonder kenmerken'}</p><small>{lastEatenLabel(dish.id)}</small></div>
-              <div class="card-actions"><button class="secondary" on:click={() => openBooking(dish.id, 'vers')}>Nu boeken</button><button class="icon-button" title="Aan planner toevoegen" on:click={() => addToPlanner(dish, 'vers')}>＋<span class="sr-only">Aan planner toevoegen</span></button><button class="delete-button" on:click={() => deleteDish(dish)}>Verwijderen</button></div>
+              <div class="card-actions"><button class="secondary" on:click={() => openBooking(dish.id, 'vers')}>Nu boeken</button><button class="icon-button" title="Aan planner toevoegen" on:click={() => addToPlanner(dish, 'vers')}>＋<span class="sr-only">Aan planner toevoegen</span></button><button class="secondary" on:click={() => editDish(dish)}>Wijzigen</button><button class="delete-button" on:click={() => deleteDish(dish)}>Verwijderen</button></div>
             </article>
           {:else}<div class="empty">Geen gerechten gevonden. Pas je filter aan of voeg een nieuw gerecht toe.</div>{/each}
         </div>
@@ -519,10 +550,10 @@
         </ol>
         <button class="primary floating" disabled={planner.length >= 7} on:click={() => plannerSourceChoiceOpen = true}>＋ Maaltijd toevoegen</button>
       </section>
-    {:else if screen === 'nieuw'}
+    {:else if screen === 'nieuw' || screen === 'bewerken'}
       <section class="page form-page" aria-labelledby="new-title">
-        <p class="eyebrow">Gerechten</p><h1 id="new-title">Nieuw gerecht</h1>
-        <form on:submit|preventDefault={saveNewDish}>
+        <p class="eyebrow">Gerechten</p><h1 id="new-title">{editingDishId ? 'Gerecht wijzigen' : 'Nieuw gerecht'}</h1>
+        <form on:submit|preventDefault={saveDish}>
           <div class="photo-placeholder">
             {#if newDishPhoto}<img src={newDishPhoto} alt="Voorbeeld van de gekozen gerechtfoto" />{:else}<span aria-hidden="true">🍲</span>{/if}
             <div><label class="photo-button" for="dish-photo">{newDishPhoto ? 'Foto vervangen' : 'Foto toevoegen'}</label><input class="sr-only" id="dish-photo" type="file" accept="image/*" on:change={chooseDishPhoto} /><span>Via de fotobibliotheek of camera van dit apparaat.</span>{#if newDishPhoto}<button class="remove-photo" type="button" on:click={() => newDishPhoto = ''}>Foto verwijderen</button>{/if}</div>
@@ -531,8 +562,9 @@
           <fieldset><legend>Gang <span>*</span></legend><div class="radio-row">{#each courses as course}<label><input type="radio" bind:group={newDishCourse} value={course} /> {course}</label>{/each}</div></fieldset>
           <fieldset><legend>Kenmerken</legend><div class="chips selectable">{#each commonTags as tag}<button type="button" class:chosen={newDishTags.includes(tag)} on:click={() => toggleNewTag(tag)}>{tag}</button>{/each}</div></fieldset>
           <label>Toelichting <textarea bind:value={newDishDescription} rows="3" placeholder="Optioneel, bijvoorbeeld een korte beschrijving."></textarea></label>
-          <label>Calorieën per 100 gram <input bind:value={newDishCalories} inputmode="numeric" type="number" min="0" placeholder="Optioneel" /></label>
-          <button class="primary submit" type="submit">Gerecht opslaan</button>
+          <label>Calorieën per 100 gram <input bind:value={newDishCalories} inputmode="decimal" type="number" min="0" step="any" placeholder="Optioneel" /></label>
+          <button class="primary submit" type="submit">{editingDishId ? 'Wijzigingen opslaan' : 'Gerecht opslaan'}</button>
+          {#if editingDishId}<button class="secondary submit" type="button" on:click={() => navigate('vers')}>Annuleren</button>{/if}
         </form>
       </section>
     {:else if screen === 'restjes'}
@@ -563,7 +595,7 @@
   </main>
 
   <nav class="bottom-nav" aria-label="Hoofdnavigatie">
-    <button class:active={screen === 'vandaag'} on:click={() => navigate('vandaag')}>⌂<span>Vandaag</span></button><button class:active={screen === 'vers'} on:click={() => navigate('vers')}>⌕<span>Gerechten</span></button><button class:active={screen === 'vriezer'} on:click={() => navigate('vriezer')}>❄<span>Vriezer</span></button><button class:active={screen === 'planner'} on:click={() => navigate('planner')}>☷<span>Planner</span></button>
+    <button class:active={screen === 'vandaag'} on:click={() => navigate('vandaag')}>⌂<span>Vandaag</span></button><button class:active={screen === 'vers' || screen === 'bewerken'} on:click={() => navigate('vers')}>⌕<span>Gerechten</span></button><button class:active={screen === 'vriezer'} on:click={() => navigate('vriezer')}>❄<span>Vriezer</span></button><button class:active={screen === 'planner'} on:click={() => navigate('planner')}>☷<span>Planner</span></button>
   </nav>
 </div>
 
@@ -646,7 +678,7 @@
   .dish-card h2 { font-size: 15px; }
   .dish-card p { margin: 4px 0 0; color: #66736c; font-size: 12px; }
   .dish-card small { display: block; margin-top: 5px; color: #174b85; font-size: 11px; font-weight: 700; }
-  .card-actions { grid-column: 1 / -1; display: flex; gap: 8px; }
+  .card-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; }
   .secondary { min-height: 36px; border: 1px solid #b8c8dc; border-radius: 9px; background: #fff; color: #1253a4; padding: 6px 10px; font-size: 12px; font-weight: 730; }
   .delete-button { min-height: 36px; margin-left: auto; border: 0; border-radius: 9px; background: transparent; color: #a23e45; padding: 6px 8px; font-size: 12px; font-weight: 700; }
   .icon-button { display: grid; flex: 0 0 36px; place-items: center; width: 36px; height: 36px; border: 1px solid #b8c8dc; border-radius: 9px; background: #fff; color: #1253a4; font-size: 20px; }

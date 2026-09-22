@@ -106,11 +106,11 @@ Na een geslaagde opslag toont de app een korte bevestiging met een herstelactie 
 | Uit de vriezer | Maaltijd gebruikt een voorraadbatch. | Planner, boeking en geschiedenis. |
 | Gereserveerd | Eén portie is tijdelijk aan een plannerregel gekoppeld. | Voorraadregel en planner. |
 | Eerst opmaken | Oudste beschikbare vriesbatch. | Vandaag en Vriezer. |
-| Verwijderen | Alleen mogelijk wanneer het gerecht niet in voorraad, planner of historie voorkomt. | Gerechtenlijst. |
+| Verwijderen | Alleen mogelijk zonder actieve plannerregel en aanwezige vriesporties. | Gerechtenlijst. |
 
 ### Wijzigen en verwijderen
 
-Een gerecht verwijderen vraagt altijd om bevestiging. De eerste release blokkeert verwijderen wanneer het gerecht nog in voorraad, planner, eetgeschiedenis of een etentje voorkomt, zodat gekoppelde gegevens niet beschadigen. Het wijzigen of verwijderen van boekingen is een vervolgstap.
+De gerechtenlijst heeft een actie **Wijzigen** voor naam, beschrijving, foto, kenmerken, gang en calorieën. Een gerecht verwijderen vraagt altijd om bevestiging. Verwijderen wordt geblokkeerd zolang het op de planner staat of er porties van in de vriezer liggen. Historische boekingen en etentjes behouden de gerechtnaam, maar het verwijderde gerecht verdwijnt uit nieuwe keuzes. Het wijzigen of verwijderen van boekingen is een vervolgstap.
 
 ## 5. De zeven schermen
 
