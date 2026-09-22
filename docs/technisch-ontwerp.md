@@ -60,7 +60,7 @@ Bronnen: [Workers-prijzen en limieten](https://developers.cloudflare.com/workers
 | Database | Cloudflare D1, met EU-jurisdictie | Relationeel, SQLite-compatibel en gratis ruim voldoende. |
 | Foto's | Cloudflare R2, met EU-jurisdictie | Bestandsopslag zonder aparte mediaservice; gratis eerste 10 GB. |
 | Database-laag | D1 prepared statements en versiebeheer voor SQL-migraties | Veilige queries en controleerbare schemawijzigingen. |
-| Aanmelding | Eigen gedeeld account met Workers-compatibele wachtwoordhash en beveiligde sessiecookie | Sluit aan op de gedeelde login uit het functioneel ontwerp. |
+| Aanmelding | Eén gedeeld account met PBKDF2-SHA-256-wachtwoordhash als Workers-secret en beveiligde sessiecookie in D1 | Sluit aan op de gedeelde login uit het functioneel ontwerp; het wachtwoord komt nooit in Git of D1 terecht. |
 | Uitrollen | Wrangler vanaf GitHub Actions of lokale ontwikkelcomputer | Herhaalbare deployment zonder serverbeheer. |
 | Back-up | D1 Time Travel plus regelmatige export naar eigen Mac/NAS | Herstelbaar en geen betaalde back-updienst vereist. |
 
@@ -102,6 +102,7 @@ De Worker controleert bestandstype en maximale omvang, genereert een onvoorspelb
 - De R2-bucket wordt bij creatie vastgezet op jurisdictie `eu`; deze keuze kan achteraf niet worden veranderd.
 - Eén gedeeld account; het wachtwoord wordt alleen als een sterke hash opgeslagen.
 - Sessiecookies zijn `HttpOnly`, `Secure` en `SameSite=Lax`.
+- De gedeelde toegang gebruikt een tijdonafhankelijke wachtwoordvergelijking en bewaart in D1 alleen een SHA-256-hash van een willekeurig sessietoken. Sessies verlopen na 30 dagen en kunnen bij uitloggen worden ingetrokken.
 - Alle invoer wordt op de Worker gevalideerd; databasequeries gebruiken parameters.
 - De app bevat geen advertenties, analytics of trackers van derden.
 - Rate limiting remt herhaalde inlogpogingen.

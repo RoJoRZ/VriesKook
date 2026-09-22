@@ -43,3 +43,7 @@ pnpm cf-typegen
 ## Cloudflare-inrichting vóór deployment
 
 De repository bevat `wrangler.jsonc`, de D1-migratie en R2-binding. Vervang vóór een eerste deployment de tijdelijke `database_id` door de ID van een nieuw aangemaakte D1-database met EU-jurisdictie en maak de R2-bucket `helpmenu-photos` eveneens met EU-jurisdictie aan. Voeg vervolgens de gedeelde login en servergestuurde sessies toe; zet nooit wachtwoorden of andere geheimen in `wrangler.jsonc`.
+
+### Gedeelde login
+
+De online versie gebruikt één gedeeld wachtwoord. Maak lokaal een PBKDF2-hash en zet uitsluitend die hash als Cloudflare-secret `AUTH_PASSWORD_HASH`; voer het echte wachtwoord nooit in een bestand of Git-commit in. De API-routes zijn `POST /api/auth/login`, `POST /api/auth/logout` en `GET /api/auth/status`.

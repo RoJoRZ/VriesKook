@@ -4,6 +4,7 @@ build/
 .wrangler/
 .env
 .env.*
+.dev.vars
 !.env.example
 *.log
 .DS_Store

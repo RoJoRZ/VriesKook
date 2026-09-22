@@ -41,8 +41,12 @@
   let dinnerDishIds: string[] = [];
   let hydrating = true;
   let plannerSourceChoiceOpen = false;
+  let onlineStatus: 'checking' | 'local' | 'anonymous' | 'authenticated' = 'checking';
+  let loginPassword = '';
+  let loginError = '';
+  let syncTimer: number | undefined;
 
-  onMount(() => {
+  onMount(async () => {
     const saved = localStorage.getItem(storageKey);
     if (saved) {
       try {
@@ -56,10 +60,23 @@
         localStorage.removeItem(storageKey);
       }
     }
+    try {
+      const response = await fetch('/api/auth/status');
+      if (response.status === 503) onlineStatus = 'local';
+      else if ((await response.json()).authenticated) {
+        onlineStatus = 'authenticated';
+        const remote = (await (await fetch('/api/state')).json()).state;
+        if (remote) { dishes = remote.dishes ?? dishes; batches = remote.batches ?? batches; planner = remote.planner ?? planner; bookings = remote.bookings ?? bookings; friendDinners = remote.friendDinners ?? friendDinners; }
+      } else onlineStatus = 'anonymous';
+    } catch { onlineStatus = 'local'; }
     hydrating = false;
   });
 
-  $: if (!hydrating) localStorage.setItem(storageKey, JSON.stringify({ dishes, batches, planner, bookings, friendDinners }));
+  $: if (!hydrating) {
+    const state = { dishes, batches, planner, bookings, friendDinners };
+    localStorage.setItem(storageKey, JSON.stringify(state));
+    if (onlineStatus === 'authenticated') { if (syncTimer) window.clearTimeout(syncTimer); syncTimer = window.setTimeout(() => fetch('/api/state', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(state) }), 450); }
+  }
   $: availableDishes = dishes.filter((dish) => !dish.archived);
   $: filteredDishes = availableDishes.filter((dish) => {
     const matchesQuery = dish.name.toLowerCase().includes(query.trim().toLowerCase());
@@ -195,6 +212,15 @@
     dishes = structuredClone(seedDishes); batches = structuredClone(seedBatches); planner = structuredClone(seedPlanner); bookings = structuredClone(seedBookings); friendDinners = structuredClone(seedFriendDinners);
     localStorage.removeItem(storageKey);
     showToast('De lokale voorbeeldgegevens zijn hersteld.');
+  }
+
+  async function login() {
+    loginError = '';
+    const response = await fetch('/api/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: loginPassword }) });
+    if (!response.ok) return loginError = 'Het wachtwoord klopt niet.';
+    onlineStatus = 'authenticated'; loginPassword = '';
+    const remote = (await (await fetch('/api/state')).json()).state;
+    if (remote) { dishes = remote.dishes ?? dishes; batches = remote.batches ?? batches; planner = remote.planner ?? planner; bookings = remote.bookings ?? bookings; friendDinners = remote.friendDinners ?? friendDinners; }
   }
 
   async function chooseDishPhoto(event: Event) {
@@ -402,6 +428,10 @@
 
 {#if toast}<div class="toast" role="status">{toast}</div>{/if}
 
+{#if onlineStatus === 'checking' || onlineStatus === 'anonymous'}
+  <div class="login-backdrop"><form class="login-card" on:submit|preventDefault={login}><span class="login-mark">✦</span><h1>HelpMenu</h1><p>{onlineStatus === 'checking' ? 'Beveiligde verbinding controleren…' : 'Meld je aan met het gedeelde wachtwoord.'}</p>{#if onlineStatus === 'anonymous'}<label>Wachtwoord<input type="password" bind:value={loginPassword} autocomplete="current-password" required /></label>{#if loginError}<p class="login-error">{loginError}</p>{/if}<button class="primary" type="submit">Aanmelden</button>{/if}</form></div>
+{/if}
+
 <style>
   :global(body) { background: #f4f7fc; }
   .app-shell { min-height: 100vh; background: #f4f7fc; }
@@ -508,6 +538,9 @@
   .booking-options input { position: absolute; opacity: 0; pointer-events: none; }
   .choice-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
   .toast { position: fixed; z-index: 30; bottom: 82px; left: 50%; width: min(calc(100% - 32px), 460px); transform: translateX(-50%); border-radius: 11px; background: #18251e; color: #fff; padding: 12px 15px; box-shadow: 0 8px 30px rgba(0,0,0,.25); font-size: 13px; }
+  .login-backdrop { position: fixed; z-index: 40; inset: 0; display: grid; place-items: center; background: #f4f7fc; padding: 18px; }
+  .login-card { width: min(100%, 380px); display: grid; gap: 16px; border: 1px solid #dce3dc; border-radius: 20px; background: #fff; padding: 26px; box-shadow: 0 16px 44px rgba(18,83,164,.12); }
+  .login-card h1 { margin: 0; color: #1253a4; font-size: 32px; }.login-card p { margin: -8px 0 0; color: #66736c; font-size: 13px; }.login-mark { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px; background: #1253a4; color: #fff; font-size: 20px; }.login-error { color: #a23e45 !important; margin: -8px 0 !important; }
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
   @media (min-width: 820px) { .app-shell { display: grid; grid-template-columns: 250px 1fr; } .sidebar { position: fixed; inset: 0 auto 0 0; width: 250px; display: flex; flex-direction: column; gap: 24px; padding: 24px 16px; border-right: 1px solid #dce3dc; background: #fff; } .sidebar .brand { text-align: left; } .sidebar nav { display: grid; gap: 4px; } .sidebar nav button { display: flex; align-items: center; gap: 12px; min-height: 42px; border: 0; border-radius: 10px; background: transparent; color: #526259; padding: 8px 10px; text-align: left; font-size: 14px; } .sidebar nav button.active { background: #e7f1ff; color: #1253a4; font-weight: 750; } .reset { margin-top: auto; border: 0; background: transparent; color: #66736c; font-size: 12px; text-align: left; } main { grid-column: 2; width: min(100%, 900px); max-width: none; padding: 0 36px 48px; } .mobile-brand { display: none; } .bottom-nav { display: none; } .modal-backdrop { place-items: center; } .quick-actions { max-width: 480px; } .dish-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .home { max-width: 620px; } }
   @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; scroll-behavior: auto !important; transition-duration: .01ms !important; } }
