@@ -1,8 +1,8 @@
 # VriesKook — Functioneel document
 
-**Versie:** 0.1 — eerste concept  
-**Datum:** 21 september 2026  
-**Status:** gebaseerd op de functionele inventarisatie in dit gesprek. Schermvoorbeelden worden later toegevoegd.
+**Versie:** 0.2 — aangevuld met eerste schermschetsen
+**Datum:** 22 september 2026
+**Status:** gebaseerd op de functionele inventarisatie en de schetsen in `Ontwerp/`.
 
 ## 1. Doel
 
@@ -30,7 +30,7 @@ Gebruikers kunnen namen opslaan van gerechten die zij graag koken en goed kennen
 | Kenmerken | Bijvoorbeeld rijst, pasta, aardappels, groente en vlees. Eén gerecht kan meerdere kenmerken hebben. |
 | Calorieën per 100 gram | Mogelijk optioneel veld; nog geen definitieve eis. |
 
-Gebruikers kunnen door de gerechten bladeren en filteren op de vastgelegde kenmerken en het gerechtstype. Een concreet voorbeeld: bij het kiezen van het kenmerk ‘rijst’ verschijnen alle gerechten met dat kenmerk.
+De schermschetsen onderscheiden hiervoor een ingang **Vers** en een ingang **Vriezer**. Beide tonen een lijst met gerechten en bieden filtering; vanuit een lijst kan een gerecht worden gekozen of de details worden geopend. Gebruikers kunnen door de gerechten bladeren en filteren op de vastgelegde kenmerken en het gerechtstype. Een concreet voorbeeld: bij het kiezen van het kenmerk ‘rijst’ verschijnen alle gerechten met dat kenmerk.
 
 Volledige recepten, ingrediëntenlijsten en bereidingsinstructies zijn nog niet als vereiste besproken.
 
@@ -41,7 +41,7 @@ De app ondersteunt twee gelijkwaardige manieren om maaltijden te kiezen:
 1. **Ad hoc:** een maaltijd toevoegen voor bijvoorbeeld vanavond, ook terwijl iemand al in de supermarkt staat.
 2. **Voor een periode:** meerdere maaltijden selecteren voor bijvoorbeeld een week.
 
-Een weekselectie is niet gekoppeld aan vaste weekdagen. Gebruikers kunnen boodschappen doen voor hun selectie en op de dag zelf bepalen welke maaltijd zij willen eten.
+Een weekselectie is niet gekoppeld aan vaste weekdagen. De planner toont een vrije, genummerde lijst voor een periode van ongeveer zeven maaltijden, met een knop om maaltijden toe te voegen. Gebruikers kunnen boodschappen doen voor hun selectie en op de dag zelf bepalen welke maaltijd zij willen eten.
 
 De selectie moet onderscheid kunnen maken tussen vers koken en uit de vriezer eten. Gebruikers willen bijvoorbeeld een periode samenstellen met drie keer vers koken en één keer een maaltijd uit de vriezer.
 
@@ -55,7 +55,7 @@ Gebruikers kunnen achteraf terugzien wat zij gegeten hebben en wanneer. De eetda
 
 ## 6. Vriezervoorraad
 
-Gebruikers kunnen zien welke bereide gerechten of restjes momenteel in de vriezer liggen.
+Gebruikers kunnen zien welke bereide gerechten of restjes momenteel in de vriezer liggen. De schermschets toont dit als een filterbare lijst, met per regel een actie om het item te kiezen of te bekijken.
 
 ### Gegevens bij ingevroren voorraad
 
@@ -65,7 +65,7 @@ Gebruikers kunnen zien welke bereide gerechten of restjes momenteel in de vrieze
 
 ### Restjes toevoegen na een maaltijd
 
-Vanuit een gegeten maaltijd kunnen gebruikers aangeven dat er porties over zijn die zij invriezen. Het gerecht wordt daarbij overgenomen; gebruikers leggen het aantal porties en de invriesdatum vast.
+Vanuit een gegeten maaltijd kunnen gebruikers aangeven dat er porties over zijn die zij invriezen. Het gerecht wordt daarbij overgenomen; gebruikers leggen het aantal porties en de invriesdatum vast. De schets voor **Restjes** wijst op een compact invoerscherm met maaltijd/gerecht, aantal porties en datum.
 
 **Voorbeeld:** na het eten blijven twee porties over. De gebruiker voegt vanuit die maaltijd twee porties toe aan de vriezervoorraad, met de datum waarop deze de vriezer in gaan.
 
@@ -81,9 +81,22 @@ Per etentje wordt vastgelegd:
 - **Wat:** de geserveerde gerechten.
 - **Wanneer:** de datum van het etentje.
 
-Dit is een eenvoudig overzicht van etentjes. Een afzonderlijk overzicht of zoekfunctie per individuele gast is niet nodig voor deze eerste versie.
+Dit is een eenvoudig overzicht met een invoerscherm voor wie, wat en wanneer. Een afzonderlijk overzicht of zoekfunctie per individuele gast is niet nodig voor deze eerste versie.
 
-## 8. Gebruiksgemak en apparaten
+## 8. Gerecht toevoegen
+
+De ingang **Nieuw gerecht** opent een invoerscherm. De schets laat de volgende onderdelen zien:
+
+- Een optionele foto van het gerecht.
+- Naam van het gerecht.
+- Een korte toelichting of omschrijving.
+- Gerechtstype/gang.
+- Kenmerken of type.
+- Calorieën.
+
+De precieze verplichting en invoervorm van deze velden worden nog vastgesteld.
+
+## 9. Gebruiksgemak en apparaten
 
 De app moet eenvoudig dagelijks te gebruiken zijn op een iPhone, Android-telefoon, iPad, andere tablet en computer.
 
@@ -95,9 +108,9 @@ Dagelijkse handelingen moeten direct bereikbaar zijn en weinig invoer vragen. Ge
 - Overgebleven porties in te vriezen.
 - De actuele vriezervoorraad te bekijken en bij te werken.
 
-Bekende gegevens, zoals het gerecht bij het invriezen van restjes, moeten zoveel mogelijk worden overgenomen om dubbele invoer te voorkomen. De schermindeling wordt later uitgewerkt aan de hand van de foto’s en voorbeelden van de gebruiker.
+Bekende gegevens, zoals het gerecht bij het invriezen van restjes, moeten zoveel mogelijk worden overgenomen om dubbele invoer te voorkomen. De eerste schermschetsen bevestigen een hoofdmenu met zes directe routes: **Vers**, **Vriezer**, **Planner**, **Nieuw gerecht**, **Restjes** en **Vrienden**. Verdere vormgeving en navigatiedetails worden later uitgewerkt.
 
-## 9. Samenhang van de functies
+## 10. Samenhang van de functies
 
 De hoofdroute is: een gerecht kiezen, eventueel opnemen in een maaltijdselectie, de maaltijd als gegeten registreren en eventuele restjes toevoegen aan de vriezervoorraad.
 
@@ -105,15 +118,15 @@ Een maaltijd uit de vriezer kan eveneens onderdeel zijn van de selectie. Na cons
 
 Het overzicht van etentjes legt aanvullend vast voor welke vrienden op een bepaalde datum is gekookt en welke gerechten zijn geserveerd.
 
-## 10. Nog uit te werken
+## 11. Nog uit te werken
 
 Onderstaande punten zijn nog geen vastgestelde functionele keuzes:
 
-- De schermindeling, op basis van de nog aan te leveren voorbeelden.
+- De exacte interacties in de lijsten: kiezen, details openen, verwijderen en afvinken als gegeten.
 - Hoe porties uit de vriezer worden afgeboekt en of dit samenvalt met het registreren van een gegeten maaltijd.
 - Of hetzelfde gerecht met verschillende invriesdatums als afzonderlijke voorraadregels wordt getoond. Dit is als voorstel genoemd, maar nog niet expliciet bevestigd.
-- Of calorieën per 100 gram worden opgenomen.
-- Welke gegevens bij het toevoegen van een gerecht verplicht zijn en hoe kenmerken kunnen worden beheerd.
+- Of calorieën per 100 gram worden opgenomen en of een foto optioneel is.
+- Welke gegevens bij het toevoegen van een gerecht verplicht zijn, en hoe gerechtstype en kenmerken kunnen worden beheerd.
 - Hoe invoerfouten in planning, eetgeschiedenis en voorraad eenvoudig kunnen worden hersteld.
 
 Automatische planningsvoorstellen, een boodschappenlijst, voedingsberekeningen en volledige recepten zijn niet vastgesteld als onderdeel van de eerste versie.
