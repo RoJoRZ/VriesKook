@@ -59,6 +59,7 @@
   let pendingConfirmation: string | null = null;
   let saveConfirmation: string | null = null;
   let snapshot = '';
+  let syncText = 'Verbinden…';
 
   onMount(() => {
     void initialise();
@@ -103,6 +104,7 @@
   }
 
   $: snapshot = JSON.stringify({ dishes, batches, planner, bookings, friendDinners });
+  $: syncText = syncStatus === 'saving' ? 'Opslaan…' : syncStatus === 'offline' ? 'Niet gesynchroniseerd' : syncStatus === 'conflict' ? 'Wijzigingen afstemmen' : syncStatus === 'local' ? 'Alleen dit apparaat' : syncStatus === 'synced' ? 'Gesynchroniseerd' : 'Verbinden…';
   $: if (!hydrating && snapshot !== localSnapshot) {
     localSnapshot = snapshot;
     localStorage.setItem(storageKey, snapshot);
@@ -249,15 +251,6 @@
 
   function requestConfirmation(message: string) {
     pendingConfirmation = message;
-  }
-
-  function syncLabel() {
-    if (syncStatus === 'saving') return 'Opslaan…';
-    if (syncStatus === 'offline') return 'Niet gesynchroniseerd';
-    if (syncStatus === 'conflict') return 'Wijzigingen afstemmen';
-    if (syncStatus === 'local') return 'Alleen dit apparaat';
-    if (syncStatus === 'synced') return 'Gesynchroniseerd';
-    return 'Verbinden…';
   }
 
   function showToast(message: string) {
@@ -429,7 +422,7 @@
     <header class="topbar">
       <button class="mobile-brand" on:click={() => navigate('vandaag')} aria-label="Naar Vandaag"><span>✦</span> HelpMenu</button>
       <div class:warning={syncStatus === 'offline' || syncStatus === 'conflict'} class="sync-status" aria-live="polite">
-        <span>{syncLabel()}</span>
+        <span>{syncText}</span>
         {#if syncStatus === 'offline'}<button on:click={retrySync}>Opnieuw</button>{:else if syncStatus === 'conflict'}<button on:click={loadNewestState}>Nieuwste laden</button>{/if}
       </div>
       <button class="account-button" on:click={() => passwordDialog = true}>Wachtwoord</button>
