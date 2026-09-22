@@ -70,7 +70,9 @@ Bronnen: [Workers-prijzen en limieten](https://developers.cloudflare.com/workers
 
 ### Huidige eerste release
 
-De online app bewaart de gedeelde gegevens als één JSON-document in `app_state` (maximaal 2 MB). Daarnaast gebruikt zij `sessions` voor sessietokens en `auth_credentials` voor de hash na een wachtwoordwijziging. Dit houdt de eerste release overzichtelijk, maar betekent dat gelijktijdige wijzigingen op twee apparaten een *laatste wijziging wint*-effect kunnen hebben. Gebruik de app daarom voorlopig niet gelijktijdig voor verschillende wijzigingen.
+De online app bewaart de gedeelde gegevens als één JSON-document in `app_state` (maximaal 2 MB). Daarnaast gebruikt zij `sessions` voor sessietokens en `auth_credentials` voor de hash na een wachtwoordwijziging. Elke gedeelde staat heeft een oplopende versie. Een apparaat mag alleen opslaan op basis van de versie die het heeft gelezen; bij een afwijking wordt de opslag geblokkeerd en kiest de gebruiker expliciet of de nieuwste gedeelde gegevens worden geladen. Zo kan een oudere telefoon geen nieuwere gegevens meer stilzwijgend overschrijven.
+
+Terwijl de app openstaat controleert zij iedere 15 seconden en bij terugkeer naar de voorgrond op een nieuwere versie. De kop toont `Opslaan…`, `Gesynchroniseerd` of een duidelijke foutstatus met herstelactie.
 
 De normale tabellen uit de eerste migratie blijven als voorbereide structuur aanwezig. Ze zijn nog niet de actieve gegevensbron; de volgende versie kan hierop overstappen voor fijnmazige validatie en veilige gelijktijdige voorraadreserveringen.
 

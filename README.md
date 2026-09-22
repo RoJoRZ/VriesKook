@@ -6,11 +6,11 @@ De app draait op [helpmenu.roriapps.workers.dev](https://helpmenu.roriapps.worke
 
 ## Wat zit erin
 
-- Gerechten toevoegen, zoeken, filteren en veilig verwijderen.
+- Gerechten toevoegen, zoeken, filteren en veilig verwijderen, met de laatste eetdatum per gerecht.
 - Maaltijden vers of uit de vriezer boeken; bij invriezen worden porties en personen per portie opgeslagen.
 - Een vrije planner, vriesvoorraad en restjes invoeren.
 - Overzicht van etentjes met vrienden.
-- Een blauwe, mobiele PWA-interface met een gedeelde online opslag.
+- Een blauwe, mobiele PWA-interface met een gedeelde online opslag, zichtbare opslagstatus en automatische verversing tussen apparaten.
 
 De online app begint zonder voorbeeldmaaltijden. Alle ingelogde apparaten delen dezelfde gegevens.
 

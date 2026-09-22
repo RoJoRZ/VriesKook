@@ -1,6 +1,6 @@
 import type { RequestEvent } from '@sveltejs/kit';
 
-type DatabaseStatement = { bind(...values: unknown[]): { first<T = unknown>(): Promise<T | null>; run(): Promise<unknown> } };
+type DatabaseStatement = { bind(...values: unknown[]): { first<T = unknown>(): Promise<T | null>; run(): Promise<{ meta?: { changes?: number } }> } };
 type AuthEnv = { DB: { prepare(query: string): DatabaseStatement }; AUTH_PASSWORD_HASH?: string };
 const encoder = new TextEncoder();
 const sessionDays = 30;

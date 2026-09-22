@@ -49,8 +49,34 @@
   let newPassword = '';
   let passwordError = '';
   let syncTimer: number | undefined;
+  let refreshTimer: number | undefined;
+  let syncInFlight = false;
+  let pendingSnapshot = '';
+  let localSnapshot = '';
+  let lastSyncedSnapshot = '';
+  let remoteVersion = 0;
+  let syncStatus: 'checking' | 'synced' | 'saving' | 'offline' | 'conflict' | 'local' = 'checking';
+  let pendingConfirmation: string | null = null;
+  let saveConfirmation: string | null = null;
+  let snapshot = '';
 
-  onMount(async () => {
+  onMount(() => {
+    void initialise();
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') void refreshRemoteState();
+    };
+    window.addEventListener('focus', refreshWhenVisible);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    refreshTimer = window.setInterval(() => void refreshRemoteState(), 15_000);
+    return () => {
+      window.removeEventListener('focus', refreshWhenVisible);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+      if (syncTimer) window.clearTimeout(syncTimer);
+      if (refreshTimer) window.clearInterval(refreshTimer);
+    };
+  });
+
+  async function initialise() {
     const saved = localStorage.getItem(storageKey);
     if (saved) {
       try {
@@ -66,24 +92,21 @@
     }
     try {
       const response = await fetch('/api/auth/status');
-      if (response.status === 503) onlineStatus = 'local';
+      if (response.status === 503) { onlineStatus = 'local'; syncStatus = 'local'; }
       else if ((await response.json()).authenticated) {
         onlineStatus = 'authenticated';
-        const remote = (await (await fetch('/api/state')).json()).state;
-        if (remote) {
-          dishes = remote.dishes ?? dishes; batches = remote.batches ?? batches; planner = remote.planner ?? planner; bookings = remote.bookings ?? bookings; friendDinners = remote.friendDinners ?? friendDinners;
-        } else {
-          dishes = []; batches = []; planner = []; bookings = []; friendDinners = [];
-        }
-      } else onlineStatus = 'anonymous';
-    } catch { onlineStatus = 'local'; }
+        await fetchAndApplyRemoteState();
+      } else { onlineStatus = 'anonymous'; syncStatus = 'local'; }
+    } catch { onlineStatus = 'local'; syncStatus = 'local'; }
     hydrating = false;
-  });
+    localSnapshot = snapshot;
+  }
 
-  $: if (!hydrating) {
-    const state = { dishes, batches, planner, bookings, friendDinners };
-    localStorage.setItem(storageKey, JSON.stringify(state));
-    if (onlineStatus === 'authenticated') { if (syncTimer) window.clearTimeout(syncTimer); syncTimer = window.setTimeout(() => fetch('/api/state', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(state) }), 450); }
+  $: snapshot = JSON.stringify({ dishes, batches, planner, bookings, friendDinners });
+  $: if (!hydrating && snapshot !== localSnapshot) {
+    localSnapshot = snapshot;
+    localStorage.setItem(storageKey, snapshot);
+    if (onlineStatus === 'authenticated' && snapshot !== lastSyncedSnapshot) scheduleSync(snapshot);
   }
   $: availableDishes = dishes.filter((dish) => !dish.archived);
   $: filteredDishes = availableDishes.filter((dish) => {
@@ -125,6 +148,118 @@
     return batchId ? batches.find((batch) => batch.id === batchId)?.peoplePerPortion : undefined;
   }
 
+  function lastEatenLabel(dishId: string) {
+    const dates = bookings.filter((booking) => booking.dishId === dishId && booking.type !== 'ingevroren').map((booking) => booking.eatenAt).sort((first, second) => second.localeCompare(first));
+    return dates[0] ? `Laatst gegeten: ${formatDate(dates[0])}` : 'Nog niet gegeten';
+  }
+
+  function stateSnapshot() {
+    return JSON.stringify({ dishes, batches, planner, bookings, friendDinners });
+  }
+
+  function applyRemoteState(payload: { state: { dishes?: Dish[]; batches?: FreezerBatch[]; planner?: PlannerEntry[]; bookings?: typeof bookings; friendDinners?: FriendDinner[] } | null; version: number }) {
+    const remote = payload.state;
+    dishes = remote?.dishes ?? [];
+    batches = remote?.batches ?? [];
+    planner = remote?.planner ?? [];
+    bookings = remote?.bookings ?? [];
+    friendDinners = remote?.friendDinners ?? [];
+    remoteVersion = payload.version;
+    lastSyncedSnapshot = stateSnapshot();
+    localSnapshot = lastSyncedSnapshot;
+    localStorage.setItem(storageKey, lastSyncedSnapshot);
+    syncStatus = 'synced';
+  }
+
+  async function fetchAndApplyRemoteState() {
+    const response = await fetch('/api/state');
+    if (!response.ok) throw new Error('De gedeelde gegevens kunnen niet worden geladen.');
+    applyRemoteState(await response.json());
+  }
+
+  function scheduleSync(nextSnapshot: string) {
+    pendingSnapshot = nextSnapshot;
+    syncStatus = 'saving';
+    if (syncTimer) window.clearTimeout(syncTimer);
+    syncTimer = window.setTimeout(() => void flushSync(), 450);
+  }
+
+  async function flushSync() {
+    if (syncInFlight || !pendingSnapshot || onlineStatus !== 'authenticated') return;
+    const snapshotToSave = pendingSnapshot;
+    pendingSnapshot = '';
+    syncInFlight = true;
+    try {
+      const response = await fetch('/api/state', {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ state: JSON.parse(snapshotToSave), version: remoteVersion })
+      });
+      if (response.status === 409) {
+        pendingSnapshot = snapshotToSave;
+        syncStatus = 'conflict';
+        showToast('Er zijn wijzigingen op een ander apparaat. Kies welke gegevens je wilt laden.');
+        return;
+      }
+      if (!response.ok) throw new Error('Opslaan mislukt.');
+      const result = await response.json() as { version: number };
+      remoteVersion = result.version;
+      lastSyncedSnapshot = snapshotToSave;
+      syncStatus = 'synced';
+      if (pendingConfirmation) {
+        saveConfirmation = pendingConfirmation;
+        pendingConfirmation = null;
+      }
+    } catch {
+      pendingSnapshot = snapshotToSave;
+      syncStatus = 'offline';
+      showToast('Opslaan lukt nu niet. Je wijziging blijft op dit apparaat staan.');
+    } finally {
+      syncInFlight = false;
+      if (pendingSnapshot && pendingSnapshot !== lastSyncedSnapshot && syncStatus === 'saving') void flushSync();
+    }
+  }
+
+  async function refreshRemoteState() {
+    if (hydrating || onlineStatus !== 'authenticated' || syncInFlight || pendingSnapshot || snapshot !== lastSyncedSnapshot) return;
+    try {
+      const response = await fetch('/api/state');
+      if (!response.ok) throw new Error();
+      const payload = await response.json() as { state: Parameters<typeof applyRemoteState>[0]['state']; version: number };
+      if (payload.version !== remoteVersion) {
+        applyRemoteState(payload);
+        showToast('Gegevens bijgewerkt vanaf je andere apparaat.');
+      }
+    } catch {
+      syncStatus = 'offline';
+    }
+  }
+
+  function retrySync() {
+    if (syncStatus === 'conflict') return;
+    scheduleSync(pendingSnapshot || snapshot);
+  }
+
+  async function loadNewestState() {
+    if (!window.confirm('Niet-opgeslagen lokale wijzigingen worden vervangen door de nieuwste online gegevens. Doorgaan?')) return;
+    pendingSnapshot = '';
+    await fetchAndApplyRemoteState();
+    showToast('De nieuwste gedeelde gegevens zijn geladen.');
+  }
+
+  function requestConfirmation(message: string) {
+    pendingConfirmation = message;
+  }
+
+  function syncLabel() {
+    if (syncStatus === 'saving') return 'Opslaan…';
+    if (syncStatus === 'offline') return 'Niet gesynchroniseerd';
+    if (syncStatus === 'conflict') return 'Wijzigingen afstemmen';
+    if (syncStatus === 'local') return 'Alleen dit apparaat';
+    if (syncStatus === 'synced') return 'Gesynchroniseerd';
+    return 'Verbinden…';
+  }
+
   function showToast(message: string) {
     toast = message;
     window.setTimeout(() => { if (toast === message) toast = ''; }, 3600);
@@ -143,7 +278,7 @@
       return showToast('Er is geen vrije portie meer beschikbaar voor dit vriesgerecht.');
     }
     planner = [...planner, { id: uid('plan'), dishId: dish.id, source, batchId: chosenBatch?.id }];
-    showToast(`${dish.name} staat in de planner.`);
+    requestConfirmation(`${dish.name} staat in de planner.`);
   }
 
   function openBooking(dishId: string, source: Source, plannerId?: string, batchId?: string) {
@@ -173,20 +308,19 @@
     bookings = [{ id: uid('booking'), dishId: dish.id, type: bookingType, eatenAt: bookingDate }, ...bookings];
     if (currentBooking.plannerId) planner = planner.filter((entry) => entry.id !== currentBooking.plannerId);
     booking = null;
-    showToast(bookingFrozen && bookingEaten ? `${dish.name} is geboekt en ${freezePortions} portie(s) zijn ingevroren.` : bookingFrozen ? `${freezePortions} portie(s) ${dish.name} zijn ingevroren.` : `${dish.name} is geboekt.`);
+    requestConfirmation(bookingFrozen && bookingEaten ? `${dish.name} is geboekt en ${freezePortions} portie(s) zijn ingevroren.` : bookingFrozen ? `${freezePortions} portie(s) ${dish.name} zijn ingevroren.` : `${dish.name} is geboekt.`);
   }
 
   function removePlanner(entry: PlannerEntry) {
     planner = planner.filter((item) => item.id !== entry.id);
-    showToast('Maaltijd uit de planner verwijderd.');
+    requestConfirmation('De maaltijd is uit de planner verwijderd.');
   }
 
   function saveLeftovers() {
     const dish = getDish(leftoversDishId);
     if (!dish || leftoversPortions < 1) return;
     batches = [...batches, { id: uid('batch'), dishId: dish.id, frozenAt: leftoversDate, available: leftoversPortions, original: leftoversPortions, peoplePerPortion: leftoversPeoplePerPortion }];
-    showToast(`${leftoversPortions} portie(s) ${dish.name} voor ${leftoversPeoplePerPortion} ${leftoversPeoplePerPortion === 1 ? 'persoon' : 'personen'} staan in de vriezer.`);
-    navigate('vriezer');
+    requestConfirmation(`${leftoversPortions} portie(s) ${dish.name} voor ${leftoversPeoplePerPortion} ${leftoversPeoplePerPortion === 1 ? 'persoon' : 'personen'} staan in de vriezer.`);
   }
 
   function toggleNewTag(tag: string) {
@@ -201,8 +335,8 @@
     const dish: Dish = { id: uid('dish'), name, course: newDishCourse, tags: newDishTags, description: newDishDescription.trim() || undefined, calories: newDishCalories ? Number(newDishCalories) : undefined, emoji, photoData: newDishPhoto || undefined };
     dishes = [...dishes, dish];
     newDishName = ''; newDishCourse = 'Hoofdgerecht'; newDishTags = []; newDishDescription = ''; newDishCalories = ''; newDishPhoto = '';
-    showToast(`${dish.name} is toegevoegd.`);
-    navigate('vers');
+    query = ''; activeTag = '';
+    requestConfirmation(`${dish.name} is toegevoegd aan je gerechten.`);
   }
 
   function toggleDinnerDish(dishId: string) {
@@ -213,7 +347,7 @@
     if (!dinnerPeople.trim() || dinnerDishIds.length === 0) return showToast('Vul in met wie jullie aten en kies minimaal één gerecht.');
     friendDinners = [{ id: uid('dinner'), date: dinnerDate, people: dinnerPeople.trim(), dishIds: dinnerDishIds, note: dinnerNote.trim() || undefined }, ...friendDinners];
     dinnerPeople = ''; dinnerNote = ''; dinnerDishIds = []; dinnerDate = today();
-    showToast('Etentje met vrienden opgeslagen.');
+    requestConfirmation('Etentje met vrienden opgeslagen.');
   }
 
   function deleteDish(dish: Dish) {
@@ -221,7 +355,7 @@
     if (used) return showToast('Dit gerecht is nog in gebruik en kan daarom niet worden verwijderd.');
     if (!window.confirm(`Weet je zeker dat je ${dish.name} wilt verwijderen?`)) return;
     dishes = dishes.filter((item) => item.id !== dish.id);
-    showToast(`${dish.name} is verwijderd.`);
+    requestConfirmation(`${dish.name} is verwijderd.`);
   }
 
   async function login() {
@@ -229,11 +363,11 @@
     const response = await fetch('/api/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: loginPassword }) });
     if (!response.ok) return loginError = 'Het wachtwoord klopt niet.';
     onlineStatus = 'authenticated'; loginPassword = '';
-    const remote = (await (await fetch('/api/state')).json()).state;
-    if (remote) {
-      dishes = remote.dishes ?? dishes; batches = remote.batches ?? batches; planner = remote.planner ?? planner; bookings = remote.bookings ?? bookings; friendDinners = remote.friendDinners ?? friendDinners;
-    } else {
-      dishes = []; batches = []; planner = []; bookings = []; friendDinners = [];
+    try {
+      await fetchAndApplyRemoteState();
+    } catch {
+      onlineStatus = 'local'; syncStatus = 'local';
+      loginError = 'Aanmelden gelukt, maar de gedeelde gegevens zijn nu niet bereikbaar.';
     }
   }
 
@@ -282,7 +416,7 @@
     <button class="brand" on:click={() => navigate('vandaag')} aria-label="Naar Vandaag"><span>✦</span> HelpMenu</button>
     <nav>
       <button class:active={screen === 'vandaag'} on:click={() => navigate('vandaag')}>⌂ <span>Vandaag</span></button>
-      <button class:active={screen === 'vers'} on:click={() => navigate('vers')}>⌕ <span>Vers</span></button>
+      <button class:active={screen === 'vers'} on:click={() => navigate('vers')}>⌕ <span>Gerechten</span></button>
       <button class:active={screen === 'vriezer'} on:click={() => navigate('vriezer')}>❄ <span>Vriezer</span></button>
       <button class:active={screen === 'planner'} on:click={() => navigate('planner')}>☷ <span>Planner</span></button>
       <button class:active={screen === 'nieuw'} on:click={() => navigate('nieuw')}>＋ <span>Nieuw gerecht</span></button>
@@ -294,6 +428,10 @@
   <main>
     <header class="topbar">
       <button class="mobile-brand" on:click={() => navigate('vandaag')} aria-label="Naar Vandaag"><span>✦</span> HelpMenu</button>
+      <div class:warning={syncStatus === 'offline' || syncStatus === 'conflict'} class="sync-status" aria-live="polite">
+        <span>{syncLabel()}</span>
+        {#if syncStatus === 'offline'}<button on:click={retrySync}>Opnieuw</button>{:else if syncStatus === 'conflict'}<button on:click={loadNewestState}>Nieuwste laden</button>{/if}
+      </div>
       <button class="account-button" on:click={() => passwordDialog = true}>Wachtwoord</button>
     </header>
 
@@ -334,11 +472,12 @@
         <div class="quick-actions">
           <button on:click={() => navigate('restjes')}>▣ Restjes invriezen</button>
           <button on:click={() => navigate('nieuw')}>＋ Nieuw gerecht</button>
+          <button on:click={() => navigate('vers')}>⌕ Gerechten bekijken ({availableDishes.length})</button>
         </div>
       </section>
     {:else if screen === 'vers'}
       <section class="page" aria-labelledby="fresh-title">
-        <p class="eyebrow">Gerechten</p><h1 id="fresh-title">Vers</h1>
+        <div class="title-row"><div><p class="eyebrow">Gerechten</p><h1 id="fresh-title">Mijn gerechten</h1></div><span class="count">{availableDishes.length}</span></div>
         <label class="search"><span class="sr-only">Zoek een gerecht</span><span>⌕</span><input bind:value={query} placeholder="Zoek een gerecht" /></label>
         <div class="chips" aria-label="Filter op kenmerk">
           <button class:chosen={!activeTag} on:click={() => activeTag = ''}>Alles</button>
@@ -348,7 +487,7 @@
           {#each filteredDishes as dish}
             <article class="dish-card">
               <div class="dish-art" aria-hidden="true">{#if dish.photoData}<img src={dish.photoData} alt="" />{:else}{dish.emoji}{/if}</div>
-              <div class="dish-card-content"><h2>{dish.name}</h2><p>{dish.course} · {dish.tags.join(' · ') || 'zonder kenmerken'}</p></div>
+              <div class="dish-card-content"><h2>{dish.name}</h2><p>{dish.course} · {dish.tags.join(' · ') || 'zonder kenmerken'}</p><small>{lastEatenLabel(dish.id)}</small></div>
               <div class="card-actions"><button class="secondary" on:click={() => openBooking(dish.id, 'vers')}>Nu boeken</button><button class="icon-button" title="Aan planner toevoegen" on:click={() => addToPlanner(dish, 'vers')}>＋<span class="sr-only">Aan planner toevoegen</span></button><button class="delete-button" on:click={() => deleteDish(dish)}>Verwijderen</button></div>
             </article>
           {:else}<div class="empty">Geen gerechten gevonden. Pas je filter aan of voeg een nieuw gerecht toe.</div>{/each}
@@ -431,7 +570,7 @@
   </main>
 
   <nav class="bottom-nav" aria-label="Hoofdnavigatie">
-    <button class:active={screen === 'vandaag'} on:click={() => navigate('vandaag')}>⌂<span>Vandaag</span></button><button class:active={screen === 'vers'} on:click={() => navigate('vers')}>⌕<span>Vers</span></button><button class:active={screen === 'vriezer'} on:click={() => navigate('vriezer')}>❄<span>Vriezer</span></button><button class:active={screen === 'planner'} on:click={() => navigate('planner')}>☷<span>Planner</span></button>
+    <button class:active={screen === 'vandaag'} on:click={() => navigate('vandaag')}>⌂<span>Vandaag</span></button><button class:active={screen === 'vers'} on:click={() => navigate('vers')}>⌕<span>Gerechten</span></button><button class:active={screen === 'vriezer'} on:click={() => navigate('vriezer')}>❄<span>Vriezer</span></button><button class:active={screen === 'planner'} on:click={() => navigate('planner')}>☷<span>Planner</span></button>
   </nav>
 </div>
 
@@ -448,6 +587,10 @@
 
 {#if toast}<div class="toast" role="status">{toast}</div>{/if}
 
+{#if saveConfirmation}
+  <div class="modal-backdrop" role="presentation"><div class="modal save-modal" role="dialog" aria-modal="true" aria-labelledby="save-title"><p class="eyebrow">HelpMenu</p><h2 id="save-title">Opslag gereed</h2><p>{saveConfirmation} Deze wijziging is gedeeld met je andere apparaten.</p><div class="choice-actions"><button class="primary" on:click={() => { saveConfirmation = null; navigate('vandaag'); }}>Naar Vandaag</button><button class="secondary" on:click={() => { saveConfirmation = null; navigate('vers'); }}>Gerechten bekijken</button></div></div></div>
+{/if}
+
 {#if passwordDialog}
   <div class="modal-backdrop"><form class="modal" on:submit|preventDefault={savePassword}><button class="close" type="button" aria-label="Sluiten" on:click={() => passwordDialog = false}>×</button><p class="eyebrow">Gedeeld account</p><h2>Wachtwoord wijzigen</h2><label>Huidig wachtwoord<input type="password" bind:value={currentPassword} autocomplete="current-password" required /></label><label>Nieuw wachtwoord<input type="password" bind:value={newPassword} autocomplete="new-password" minlength="12" required /></label>{#if passwordError}<p class="login-error">{passwordError}</p>{/if}<button class="primary submit" type="submit">Wachtwoord opslaan</button></form></div>
 {/if}
@@ -461,12 +604,15 @@
   .app-shell { min-height: 100vh; background: #f4f7fc; }
   .sidebar { display: none; }
   main { max-width: 760px; margin: 0 auto; padding: 0 16px 96px; }
-  .topbar { height: 66px; display: flex; align-items: center; justify-content: space-between; }
+  .topbar { height: 66px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
   .brand, .mobile-brand { border: 0; background: transparent; color: #1253a4; font-size: 19px; font-weight: 760; letter-spacing: -.04em; padding: 8px 0; }
   .brand span, .mobile-brand span { display: inline-grid; place-items: center; width: 24px; height: 24px; background: #1253a4; color: #fff; border-radius: 8px; font-size: 14px; letter-spacing: 0; }
   .avatar { display: grid; place-items: center; width: 34px; height: 34px; background: #f4e3bd; border-radius: 50%; color: #493a1e; font-size: 12px; font-weight: 750; }
   .local-label { margin-left: auto; margin-right: 11px; border-radius: 999px; padding: 4px 8px; background: #e7f1ff; color: #1253a4; font-size: 11px; font-weight: 700; }
   .account-button { border: 0; background: transparent; color: #1253a4; font-size: 12px; font-weight: 700; }
+  .sync-status { display: flex; align-items: center; gap: 6px; margin-left: auto; border-radius: 999px; background: #e7f1ff; color: #1253a4; padding: 5px 8px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+  .sync-status.warning { background: #fff1d4; color: #8a5811; }
+  .sync-status button { border: 0; border-bottom: 1px solid currentColor; background: transparent; color: inherit; padding: 0; font-size: inherit; font-weight: 800; }
   .page { animation: enter .2s ease-out; }
   @keyframes enter { from { opacity: .45; transform: translateY(4px); } to { opacity: 1; transform: none; } }
   .eyebrow { margin: 0; color: #66736c; font-size: 12px; font-weight: 730; letter-spacing: .06em; text-transform: uppercase; }
@@ -489,6 +635,7 @@
   .accent-item { background: #fffdf7; }
   .quick-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 13px; }
   .quick-actions button { min-height: 52px; border: 1px dashed #b8c8dc; border-radius: 12px; background: #fff; color: #344c6b; font-size: 13px; text-align: left; padding: 10px; }
+  .quick-actions button:last-child { grid-column: 1 / -1; }
   .bottom-nav { position: fixed; z-index: 4; bottom: 0; left: 0; right: 0; display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid #dce3dc; background: rgba(255,255,255,.96); backdrop-filter: blur(12px); padding: 6px env(safe-area-inset-right) calc(6px + env(safe-area-inset-bottom)) env(safe-area-inset-left); }
   .bottom-nav button { border: 0; background: transparent; color: #66736c; display: grid; gap: 2px; place-items: center; min-height: 48px; font-size: 20px; }
   .bottom-nav button span { font-size: 10px; }
@@ -505,6 +652,7 @@
   .dish-card-content { min-width: 0; padding-top: 3px; }
   .dish-card h2 { font-size: 15px; }
   .dish-card p { margin: 4px 0 0; color: #66736c; font-size: 12px; }
+  .dish-card small { display: block; margin-top: 5px; color: #174b85; font-size: 11px; font-weight: 700; }
   .card-actions { grid-column: 1 / -1; display: flex; gap: 8px; }
   .secondary { min-height: 36px; border: 1px solid #b8c8dc; border-radius: 9px; background: #fff; color: #1253a4; padding: 6px 10px; font-size: 12px; font-weight: 730; }
   .delete-button { min-height: 36px; margin-left: auto; border: 0; border-radius: 9px; background: transparent; color: #a23e45; padding: 6px 8px; font-size: 12px; font-weight: 700; }
@@ -557,6 +705,7 @@
   .modal-backdrop { position: fixed; z-index: 10; inset: 0; display: grid; place-items: end center; background: rgba(24,37,30,.45); padding: 16px; }
   .modal { position: relative; width: min(100%, 480px); display: grid; gap: 15px; border-radius: 20px; background: #f4f7fc; padding: 22px; box-shadow: 0 20px 55px rgba(0,0,0,.24); }
   .modal h2 { font-size: 24px; }
+  .save-modal p:not(.eyebrow) { margin: -5px 0 0; color: #526259; font-size: 14px; line-height: 1.5; }
   .close { position: absolute; top: 10px; right: 10px; width: 38px; height: 38px; border: 0; border-radius: 50%; background: #fff; color: #526259; font-size: 25px; }
   .booking-options { display: grid; grid-template-columns: repeat(2, 1fr); gap: 7px; }
   .booking-options label { display: flex; align-items: center; justify-content: center; min-height: 53px; border: 1px solid #dce3dc; border-radius: 10px; background: #fff; color: #526259; padding: 7px; text-align: center; font-size: 12px; font-weight: 650; }

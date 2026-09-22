@@ -19,7 +19,7 @@ Dit document beschrijft wat de app moet kunnen. Technische keuzes en de technisc
 
 ## 3. Gerechtenverzameling en kookinspiratie
 
-Gebruikers kunnen namen opslaan van gerechten die zij graag koken en goed kennen. Deze verzameling vormt de basis om doorheen te bladeren als zij geen inspiratie hebben.
+Gebruikers kunnen namen opslaan van gerechten die zij graag koken en goed kennen. Deze verzameling vormt de basis om doorheen te bladeren als zij geen inspiratie hebben. De route **Gerechten** toont de volledige bewaarde lijst; per gerecht is zichtbaar wanneer het voor het laatst is gegeten, of dat het nog niet is gegeten.
 
 ### Gegevens per gerecht
 
@@ -70,6 +70,8 @@ Het wijzigen of verwijderen van een bestaande boeking, met herstel van de gekopp
 De app houdt bij welke maaltijden daadwerkelijk gegeten zijn en op welke datum. Dit geldt zowel voor maaltijden uit een vooraf gemaakte selectie als voor ad hoc toegevoegde maaltijden. Bij boeken staat de eetdatum standaard op vandaag, maar de gebruiker kan deze aanpassen.
 
 Gebruikers kunnen achteraf terugzien wat zij gegeten hebben en wanneer. De eetdatum wordt pas bij het daadwerkelijk eten vastgelegd, niet bij het plannen.
+
+Na elke invoer wacht de app op een bevestiging van de online opslag. Pas daarna verschijnt de melding **Opslag gereed**, met een route naar **Vandaag** of **Gerechten**. Bij geen verbinding blijft de wijziging op het apparaat staan en toont de app dat deze nog niet is gesynchroniseerd.
 
 ## 6. Vriezervoorraad
 
