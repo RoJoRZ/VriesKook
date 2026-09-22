@@ -44,6 +44,10 @@
   let onlineStatus: 'checking' | 'local' | 'anonymous' | 'authenticated' = 'checking';
   let loginPassword = '';
   let loginError = '';
+  let passwordDialog = false;
+  let currentPassword = '';
+  let newPassword = '';
+  let passwordError = '';
   let syncTimer: number | undefined;
 
   onMount(async () => {
@@ -66,7 +70,11 @@
       else if ((await response.json()).authenticated) {
         onlineStatus = 'authenticated';
         const remote = (await (await fetch('/api/state')).json()).state;
-        if (remote) { dishes = remote.dishes ?? dishes; batches = remote.batches ?? batches; planner = remote.planner ?? planner; bookings = remote.bookings ?? bookings; friendDinners = remote.friendDinners ?? friendDinners; }
+        if (remote) {
+          dishes = remote.dishes ?? dishes; batches = remote.batches ?? batches; planner = remote.planner ?? planner; bookings = remote.bookings ?? bookings; friendDinners = remote.friendDinners ?? friendDinners;
+        } else {
+          dishes = []; batches = []; planner = []; bookings = []; friendDinners = [];
+        }
       } else onlineStatus = 'anonymous';
     } catch { onlineStatus = 'local'; }
     hydrating = false;
@@ -208,10 +216,12 @@
     showToast('Etentje met vrienden opgeslagen.');
   }
 
-  function resetDemo() {
-    dishes = structuredClone(seedDishes); batches = structuredClone(seedBatches); planner = structuredClone(seedPlanner); bookings = structuredClone(seedBookings); friendDinners = structuredClone(seedFriendDinners);
-    localStorage.removeItem(storageKey);
-    showToast('De lokale voorbeeldgegevens zijn hersteld.');
+  function deleteDish(dish: Dish) {
+    const used = batches.some((batch) => batch.dishId === dish.id) || planner.some((entry) => entry.dishId === dish.id) || bookings.some((booking) => booking.dishId === dish.id) || friendDinners.some((dinner) => dinner.dishIds.includes(dish.id));
+    if (used) return showToast('Dit gerecht is nog in gebruik en kan daarom niet worden verwijderd.');
+    if (!window.confirm(`Weet je zeker dat je ${dish.name} wilt verwijderen?`)) return;
+    dishes = dishes.filter((item) => item.id !== dish.id);
+    showToast(`${dish.name} is verwijderd.`);
   }
 
   async function login() {
@@ -220,7 +230,19 @@
     if (!response.ok) return loginError = 'Het wachtwoord klopt niet.';
     onlineStatus = 'authenticated'; loginPassword = '';
     const remote = (await (await fetch('/api/state')).json()).state;
-    if (remote) { dishes = remote.dishes ?? dishes; batches = remote.batches ?? batches; planner = remote.planner ?? planner; bookings = remote.bookings ?? bookings; friendDinners = remote.friendDinners ?? friendDinners; }
+    if (remote) {
+      dishes = remote.dishes ?? dishes; batches = remote.batches ?? batches; planner = remote.planner ?? planner; bookings = remote.bookings ?? bookings; friendDinners = remote.friendDinners ?? friendDinners;
+    } else {
+      dishes = []; batches = []; planner = []; bookings = []; friendDinners = [];
+    }
+  }
+
+  async function savePassword() {
+    passwordError = '';
+    const response = await fetch('/api/auth/change-password', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ currentPassword, newPassword }) });
+    const result = await response.json();
+    if (!response.ok) return passwordError = result.error ?? 'Wachtwoord wijzigen mislukt.';
+    currentPassword = ''; newPassword = ''; passwordDialog = false; showToast('Wachtwoord gewijzigd.');
   }
 
   async function chooseDishPhoto(event: Event) {
@@ -267,14 +289,12 @@
       <button class:active={screen === 'restjes'} on:click={() => navigate('restjes')}>▣ <span>Restjes</span></button>
       <button class:active={screen === 'vrienden'} on:click={() => navigate('vrienden')}>♧ <span>Vrienden</span></button>
     </nav>
-    <button class="reset" on:click={resetDemo}>Voorbeeldgegevens herstellen</button>
   </aside>
 
   <main>
     <header class="topbar">
       <button class="mobile-brand" on:click={() => navigate('vandaag')} aria-label="Naar Vandaag"><span>✦</span> HelpMenu</button>
-      <span class="local-label">Lokale proefversie</span>
-      <span class="avatar" aria-label="Gedeeld account">VK</span>
+      <button class="account-button" on:click={() => passwordDialog = true}>Wachtwoord</button>
     </header>
 
     {#if screen === 'vandaag'}
@@ -329,7 +349,7 @@
             <article class="dish-card">
               <div class="dish-art" aria-hidden="true">{#if dish.photoData}<img src={dish.photoData} alt="" />{:else}{dish.emoji}{/if}</div>
               <div class="dish-card-content"><h2>{dish.name}</h2><p>{dish.course} · {dish.tags.join(' · ') || 'zonder kenmerken'}</p></div>
-              <div class="card-actions"><button class="secondary" on:click={() => openBooking(dish.id, 'vers')}>Nu boeken</button><button class="icon-button" title="Aan planner toevoegen" on:click={() => addToPlanner(dish, 'vers')}>＋<span class="sr-only">Aan planner toevoegen</span></button></div>
+              <div class="card-actions"><button class="secondary" on:click={() => openBooking(dish.id, 'vers')}>Nu boeken</button><button class="icon-button" title="Aan planner toevoegen" on:click={() => addToPlanner(dish, 'vers')}>＋<span class="sr-only">Aan planner toevoegen</span></button><button class="delete-button" on:click={() => deleteDish(dish)}>Verwijderen</button></div>
             </article>
           {:else}<div class="empty">Geen gerechten gevonden. Pas je filter aan of voeg een nieuw gerecht toe.</div>{/each}
         </div>
@@ -428,6 +448,10 @@
 
 {#if toast}<div class="toast" role="status">{toast}</div>{/if}
 
+{#if passwordDialog}
+  <div class="modal-backdrop"><form class="modal" on:submit|preventDefault={savePassword}><button class="close" type="button" aria-label="Sluiten" on:click={() => passwordDialog = false}>×</button><p class="eyebrow">Gedeeld account</p><h2>Wachtwoord wijzigen</h2><label>Huidig wachtwoord<input type="password" bind:value={currentPassword} autocomplete="current-password" required /></label><label>Nieuw wachtwoord<input type="password" bind:value={newPassword} autocomplete="new-password" minlength="12" required /></label>{#if passwordError}<p class="login-error">{passwordError}</p>{/if}<button class="primary submit" type="submit">Wachtwoord opslaan</button></form></div>
+{/if}
+
 {#if onlineStatus === 'checking' || onlineStatus === 'anonymous'}
   <div class="login-backdrop"><form class="login-card" on:submit|preventDefault={login}><span class="login-mark">✦</span><h1>HelpMenu</h1><p>{onlineStatus === 'checking' ? 'Beveiligde verbinding controleren…' : 'Meld je aan met het gedeelde wachtwoord.'}</p>{#if onlineStatus === 'anonymous'}<label>Wachtwoord<input type="password" bind:value={loginPassword} autocomplete="current-password" required /></label>{#if loginError}<p class="login-error">{loginError}</p>{/if}<button class="primary" type="submit">Aanmelden</button>{/if}</form></div>
 {/if}
@@ -442,6 +466,7 @@
   .brand span, .mobile-brand span { display: inline-grid; place-items: center; width: 24px; height: 24px; background: #1253a4; color: #fff; border-radius: 8px; font-size: 14px; letter-spacing: 0; }
   .avatar { display: grid; place-items: center; width: 34px; height: 34px; background: #f4e3bd; border-radius: 50%; color: #493a1e; font-size: 12px; font-weight: 750; }
   .local-label { margin-left: auto; margin-right: 11px; border-radius: 999px; padding: 4px 8px; background: #e7f1ff; color: #1253a4; font-size: 11px; font-weight: 700; }
+  .account-button { border: 0; background: transparent; color: #1253a4; font-size: 12px; font-weight: 700; }
   .page { animation: enter .2s ease-out; }
   @keyframes enter { from { opacity: .45; transform: translateY(4px); } to { opacity: 1; transform: none; } }
   .eyebrow { margin: 0; color: #66736c; font-size: 12px; font-weight: 730; letter-spacing: .06em; text-transform: uppercase; }
@@ -482,6 +507,7 @@
   .dish-card p { margin: 4px 0 0; color: #66736c; font-size: 12px; }
   .card-actions { grid-column: 1 / -1; display: flex; gap: 8px; }
   .secondary { min-height: 36px; border: 1px solid #b8c8dc; border-radius: 9px; background: #fff; color: #1253a4; padding: 6px 10px; font-size: 12px; font-weight: 730; }
+  .delete-button { min-height: 36px; margin-left: auto; border: 0; border-radius: 9px; background: transparent; color: #a23e45; padding: 6px 8px; font-size: 12px; font-weight: 700; }
   .icon-button { display: grid; flex: 0 0 36px; place-items: center; width: 36px; height: 36px; border: 1px solid #b8c8dc; border-radius: 9px; background: #fff; color: #1253a4; font-size: 20px; }
   .floating { width: 100%; margin-top: 20px; }
   .title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }

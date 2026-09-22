@@ -44,6 +44,27 @@ export async function passwordIsValid(password: string, stored?: string) {
   return sameBytes(new Uint8Array(derived), base64ToBytes(expected));
 }
 
+export async function passwordHashFor(password: string) {
+  const salt = bytesToBase64(crypto.getRandomValues(new Uint8Array(16))).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
+  const key = await crypto.subtle.importKey('raw', encoder.encode(password), 'PBKDF2', false, ['deriveBits']);
+  const derived = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: encoder.encode(salt), iterations: 100_000 }, key, 256);
+  return `pbkdf2-sha256$100000$${salt}$${bytesToBase64(new Uint8Array(derived))}`;
+}
+
+async function credentialHash(event: RequestEvent) {
+  const row = await envFor(event).DB.prepare('SELECT password_hash FROM auth_credentials WHERE id = 1').bind().first<{ password_hash: string }>();
+  return row?.password_hash ?? envFor(event).AUTH_PASSWORD_HASH;
+}
+
+export async function credentialsAreValid(event: RequestEvent, password: string) {
+  return passwordIsValid(password, await credentialHash(event));
+}
+
+export async function changePassword(event: RequestEvent, password: string) {
+  const passwordHash = await passwordHashFor(password);
+  await envFor(event).DB.prepare('INSERT INTO auth_credentials (id, password_hash, updated_at) VALUES (1, ?, CURRENT_TIMESTAMP) ON CONFLICT(id) DO UPDATE SET password_hash = excluded.password_hash, updated_at = CURRENT_TIMESTAMP').bind(passwordHash).run();
+}
+
 export function passwordHashMatch(stored?: string) {
   return stored?.match(/^pbkdf2-sha256\$(\d+)\$([^$]+)\$([^$]+)$/);
 }
@@ -63,7 +84,7 @@ export async function createSession(event: RequestEvent) {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
   const token = bytesToBase64(bytes).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
   const expiresAt = new Date(Date.now() + sessionDays * 86_400_000).toISOString();
-  await envFor(event).DB.prepare('INSERT INTO sessions (id, token_hash, expires_at) VALUES (?, ?, ?)').bind(crypto.randomUUID(), await sha256(token), expiresAt).run();
+  await envFor(event).DB.prepare('INSERT INTO sessions (id, token_hash, expires_at) VALUES (?, ?, ?)').bind(await sha256(`${token}:id`), await sha256(token), expiresAt).run();
   return `helpmenu_session=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${sessionDays * 86_400};`;
 }
 
