@@ -1,14 +1,14 @@
 # HelpMenu — Technisch ontwerp
 
-**Versie:** 1.0 — huidige eerste release
-**Datum:** 22 september 2026  
+**Versie:** 1.1 — foto-opslag via R2
+**Datum:** 23 september 2026
 **Status:** online op Cloudflare Workers; dit document onderscheidt de huidige implementatie van de beoogde vervolgstappen.
 
 ## 1. Besluitvoorstel
 
 Voor HelpMenu is het gratis Cloudflare-platform een goede technische keuze. De app heeft twee gebruikers, weinig gegevens, één foto per gerecht en eenvoudige boekingen. Dat blijft ruim binnen de gratis limieten, zonder eigen server, database-abonnement of maandelijkse hostingkosten.
 
-De huidige oplossing is een **installerenbare webapp (PWA)** met een kleine API op Cloudflare Workers en een D1-database. De D1-database en de al aangemaakte R2-bucket hebben EU-jurisdictie. R2 is voorbereid voor foto's, maar wordt nog niet gebruikt voor uploads.
+De huidige oplossing is een **installerenbare webapp (PWA)** met een kleine API op Cloudflare Workers, een D1-database voor gedeelde gegevens en R2 voor gerechtfoto's. D1 en de R2-bucket hebben EU-jurisdictie.
 
 De online productieversie is beschikbaar op `https://helpmenu.roriapps.workers.dev`.
 
@@ -60,7 +60,7 @@ Bronnen: [Workers-prijzen en limieten](https://developers.cloudflare.com/workers
 | Gebruikersinterface | SvelteKit met TypeScript, statisch gebouwde PWA | Snel, lichtgewicht en installabel op alle gewenste apparaten. |
 | API | Cloudflare Worker met TypeScript | Geen serverproces of container nodig; eenvoudig te implementeren naast de PWA. |
 | Database | Cloudflare D1, met EU-jurisdictie | Relationeel, SQLite-compatibel en gratis ruim voldoende. |
-| Foto's | In de eerste release als lokale afbeeldingsdata in de gedeelde staat; R2 is al gebonden voor een latere uploadroute | De foto kan via de systeemkiezer worden gekozen. Voor veel of grote foto's is verplaatsing naar R2 nodig. |
+| Foto's | Privé in R2; in D1 staat alleen de foto-URL | De foto kan via de systeemkiezer worden gekozen en vult het gedeelde JSON-record niet op. |
 | Database-laag | D1 prepared statements en versiebeheer voor SQL-migraties | De app gebruikt nu één gedeelde JSON-staat; de genormaliseerde tabellen zijn voorbereid voor een volgende versie. |
 | Aanmelding | Eén gedeeld account met PBKDF2-SHA-256-hash en beveiligde sessiecookie in D1 | De initiële hash staat als Workers-secret. Na een wachtwoordwijziging staat uitsluitend de nieuwe hash in D1; het wachtwoord zelf komt nooit in Git of D1 terecht. |
 | Uitrollen | Wrangler vanaf GitHub Actions of lokale ontwikkelcomputer | Herhaalbare deployment zonder serverbeheer. |
@@ -70,7 +70,7 @@ Bronnen: [Workers-prijzen en limieten](https://developers.cloudflare.com/workers
 
 ### Huidige eerste release
 
-De online app bewaart de gedeelde gegevens als één JSON-document in `app_state` (maximaal 2 MB). Daarnaast gebruikt zij `sessions` voor sessietokens en `auth_credentials` voor de hash na een wachtwoordwijziging. Elke gedeelde staat heeft een oplopende versie. Een apparaat mag alleen opslaan op basis van de versie die het heeft gelezen; bij een afwijking wordt de opslag geblokkeerd en kiest de gebruiker expliciet of de nieuwste gedeelde gegevens worden geladen. Zo kan een oudere telefoon geen nieuwere gegevens meer stilzwijgend overschrijven.
+De online app bewaart de gedeelde gegevens als één JSON-document in `app_state` (maximaal 2 MB); foto's zelf staan afzonderlijk in R2 en tellen niet mee. Daarnaast gebruikt zij `sessions` voor sessietokens en `auth_credentials` voor de hash na een wachtwoordwijziging. Elke gedeelde staat heeft een oplopende versie. Een apparaat mag alleen opslaan op basis van de versie die het heeft gelezen; bij een afwijking wordt de opslag geblokkeerd en kiest de gebruiker expliciet of de nieuwste gedeelde gegevens worden geladen. Zo kan een oudere telefoon geen nieuwere gegevens meer stilzwijgend overschrijven.
 
 Terwijl de app openstaat controleert zij iedere 15 seconden en bij terugkeer naar de voorgrond op een nieuwere versie. De kop toont `Opslaan…`, `Gesynchroniseerd` of een duidelijke foutstatus met herstelactie.
 
@@ -104,9 +104,9 @@ De database gebruikt interne unieke identifiers. Eet- en invriesdatums worden al
 
 ## 6. Foto's
 
-De PWA gebruikt een standaard bestandsinvoer met `accept="image/*"`. Op iPhone opent Safari daardoor de systeemkiezer, waar de gebruiker een foto uit de Fotobibliotheek of, wanneer iOS die aanbiedt, de camera kan kiezen. In de eerste release wordt die foto als afbeeldingsdata in de gedeelde staat opgeslagen. Daardoor tellen foto's mee in de limiet van 2 MB voor alle gegevens samen.
+De PWA gebruikt een standaard bestandsinvoer met `accept="image/*"`. Op iPhone opent Safari daardoor de systeemkiezer, waar de gebruiker een foto uit de Fotobibliotheek of, wanneer iOS die aanbiedt, de camera kan kiezen. De browser verkleint de foto tot maximaal 1600 pixels aan de langste zijde en maakt bij voorkeur een WebP-bestand. De beveiligde Worker-route `POST /api/photos` valideert type, bestandsinhoud en een bovengrens van 5 MB, geeft het bestand een willekeurige naam en bewaart het privé in R2. Alleen de korte URL wordt in `app_state` opgeslagen. `GET /api/photos/{id}` geeft de foto uitsluitend terug bij een geldige sessie en zonder gedeelde cache.
 
-De geplande R2-uitbreiding verkleint foto's lokaal, valideert type en omvang in de Worker, genereert een onvoorspelbare bestandsnaam en bewaart de foto privé in R2. Die uitbreiding is nodig voordat meerdere of grotere foto's praktisch worden.
+De eerdere implementatie zette de volledige foto als afbeeldingsdata in het gedeelde JSON-record. Daardoor kon al de eerste foto de limiet van 2 MB raken; de melding dat de opslag bijna vol was, verwees niet naar de daadwerkelijke R2-capaciteit. Bestaande foto’s in dat oude formaat blijven zichtbaar en worden bij het opnieuw opslaan van het gerecht naar R2 verplaatst. Vervangen of verwijderen van een foto verwijdert het oude R2-object nog niet; opruimen van ongebruikte foto-objecten is een beheerverbetering voor later.
 
 ## 7. Privacy en beveiliging
 

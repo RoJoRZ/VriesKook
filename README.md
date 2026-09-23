@@ -6,7 +6,7 @@ De app draait op [helpmenu.roriapps.workers.dev](https://helpmenu.roriapps.worke
 
 ## Wat zit erin
 
-- Gerechten toevoegen, zoeken, filteren, wijzigen en veilig verwijderen, met de laatste eetdatum per gerecht.
+- Gerechten toevoegen, zoeken, filteren, wijzigen en veilig verwijderen, met de laatste eetdatum per gerecht. Foto's worden privé opgeslagen in Cloudflare R2 en blijven zichtbaar op beide apparaten.
 - Maaltijden vers of uit de vriezer boeken; bij invriezen worden porties en personen per portie opgeslagen.
 - Een vrije planner, vriesvoorraad en restjes invoeren.
 - Overzicht van etentjes met vrienden.

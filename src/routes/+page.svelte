@@ -36,6 +36,9 @@
   let newDishCalories = '';
   let newDishTags: string[] = [];
   let newDishPhoto = '';
+  let newDishPhotoBlob: Blob | null = null;
+  let photoPreviewUrl = '';
+  let savingDish = false;
   let editingDishId: string | null = null;
   let dinnerDate = today();
   let dinnerPeople = '';
@@ -76,6 +79,7 @@
       document.removeEventListener('visibilitychange', refreshWhenVisible);
       if (syncTimer) window.clearTimeout(syncTimer);
       if (refreshTimer) window.clearInterval(refreshTimer);
+      clearPhotoPreview();
     };
   });
 
@@ -267,6 +271,7 @@
   }
 
   function resetDishForm() {
+    clearPhotoPreview();
     editingDishId = null;
     newDishName = '';
     newDishCourse = 'Hoofdgerecht';
@@ -277,6 +282,7 @@
   }
 
   function editDish(dish: Dish) {
+    clearPhotoPreview();
     editingDishId = dish.id;
     newDishName = dish.name;
     newDishCourse = dish.course;
@@ -344,7 +350,8 @@
     newDishTags = newDishTags.includes(tag) ? newDishTags.filter((item) => item !== tag) : [...newDishTags, tag];
   }
 
-  function saveDish() {
+  async function saveDish() {
+    if (savingDish) return;
     const name = newDishName.trim();
     if (!name) return showToast('Vul eerst de naam van het gerecht in.');
     if (name.length > 20) return showToast('De naam van een gerecht mag maximaal 20 karakters hebben.');
@@ -353,13 +360,30 @@
     const emoji = newDishCourse === 'Nagerecht' ? '🍰' : newDishCourse === 'Voorgerecht' ? '🥣' : '🍲';
     const previous = editingDishId ? getDish(editingDishId) : undefined;
     if (editingDishId && (!previous || previous.archived)) return showToast('Dit gerecht is niet meer beschikbaar. Open de gerechtenlijst opnieuw.');
-    const dish: Dish = { ...previous, id: previous?.id ?? uid('dish'), name, course: newDishCourse, tags: [...newDishTags], description: newDishDescription.trim() || undefined, calories, emoji, photoData: newDishPhoto || undefined };
-    const nextDishes = previous ? dishes.map((item) => item.id === previous.id ? dish : item) : [...dishes, dish];
-    if (JSON.stringify({ dishes: nextDishes, batches, planner, bookings, friendDinners }).length > 1_900_000) return showToast('De gedeelde opslag is bijna vol. Kies een kleinere foto.');
-    dishes = nextDishes;
-    resetDishForm();
-    query = ''; activeTag = '';
-    requestConfirmation(previous ? `${dish.name} is gewijzigd.` : `${dish.name} is toegevoegd aan je gerechten.`);
+    savingDish = true;
+    try {
+      let photoReference = newDishPhoto;
+      if (newDishPhotoBlob || newDishPhoto.startsWith('data:')) {
+        if (onlineStatus !== 'authenticated') throw new Error('Foto opslaan vereist een online verbinding. Probeer het opnieuw zodra je bent aangemeld.');
+        const photo = newDishPhotoBlob ?? await (await fetch(newDishPhoto)).blob();
+        if (photo.size > 5_000_000) throw new Error('De foto is te groot (maximaal 5 MB na verkleinen).');
+        const response = await fetch('/api/photos', { method: 'POST', headers: { 'content-type': photo.type }, body: photo });
+        const result = await response.json() as { url?: string; error?: string };
+        if (!response.ok || !result.url) throw new Error(result.error ?? 'Foto opslaan mislukt. Probeer het opnieuw.');
+        photoReference = result.url;
+      }
+      const dish: Dish = { ...previous, id: previous?.id ?? uid('dish'), name, course: newDishCourse, tags: [...newDishTags], description: newDishDescription.trim() || undefined, calories, emoji, photoData: photoReference || undefined };
+      const nextDishes = previous ? dishes.map((item) => item.id === previous.id ? dish : item) : [...dishes, dish];
+      if (JSON.stringify({ dishes: nextDishes, batches, planner, bookings, friendDinners }).length > 1_900_000) throw new Error('De gedeelde gegevenslijst is te groot. Neem contact op voor hulp.');
+      dishes = nextDishes;
+      resetDishForm();
+      query = ''; activeTag = '';
+      requestConfirmation(previous ? `${dish.name} is gewijzigd.` : `${dish.name} is toegevoegd aan je gerechten.`);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Gerecht opslaan mislukt. Probeer het opnieuw.');
+    } finally {
+      savingDish = false;
+    }
   }
 
   function toggleDinnerDish(dishId: string) {
@@ -403,6 +427,17 @@
     currentPassword = ''; newPassword = ''; passwordDialog = false; showToast('Wachtwoord gewijzigd.');
   }
 
+  function clearPhotoPreview() {
+    if (photoPreviewUrl) URL.revokeObjectURL(photoPreviewUrl);
+    photoPreviewUrl = '';
+    newDishPhotoBlob = null;
+  }
+
+  function removeDishPhoto() {
+    clearPhotoPreview();
+    newDishPhoto = '';
+  }
+
   async function chooseDishPhoto(event: Event) {
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
@@ -420,7 +455,13 @@
       const context = canvas.getContext('2d');
       if (!context) throw new Error('De foto kan niet worden verwerkt.');
       context.drawImage(image, 0, 0, canvas.width, canvas.height);
-      newDishPhoto = canvas.toDataURL('image/webp', 0.82);
+      const photo = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/webp', 0.82));
+      if (!photo) throw new Error('De foto kan niet worden verwerkt.');
+      if (photo.size > 5_000_000) throw new Error('De foto is te groot (maximaal 5 MB na verkleinen).');
+      clearPhotoPreview();
+      newDishPhotoBlob = photo;
+      photoPreviewUrl = URL.createObjectURL(photo);
+      newDishPhoto = photoPreviewUrl;
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'De foto kan niet worden verwerkt.');
     } finally {
@@ -556,14 +597,14 @@
         <form on:submit|preventDefault={saveDish}>
           <div class="photo-placeholder">
             {#if newDishPhoto}<img src={newDishPhoto} alt="Voorbeeld van de gekozen gerechtfoto" />{:else}<span aria-hidden="true">🍲</span>{/if}
-            <div><label class="photo-button" for="dish-photo">{newDishPhoto ? 'Foto vervangen' : 'Foto toevoegen'}</label><input class="sr-only" id="dish-photo" type="file" accept="image/*" on:change={chooseDishPhoto} /><span>Via de fotobibliotheek of camera van dit apparaat.</span>{#if newDishPhoto}<button class="remove-photo" type="button" on:click={() => newDishPhoto = ''}>Foto verwijderen</button>{/if}</div>
+            <div><label class="photo-button" for="dish-photo">{newDishPhoto ? 'Foto vervangen' : 'Foto toevoegen'}</label><input class="sr-only" id="dish-photo" type="file" accept="image/*" disabled={savingDish} on:change={chooseDishPhoto} /><span>Via de fotobibliotheek of camera van dit apparaat.</span>{#if newDishPhoto}<button class="remove-photo" type="button" disabled={savingDish} on:click={removeDishPhoto}>Foto verwijderen</button>{/if}</div>
           </div>
           <label>Naam <span>*</span><input bind:value={newDishName} required maxlength="20" placeholder="Bijv. pompoensoep" /><small class="field-hint">{newDishName.length}/20 karakters</small></label>
           <fieldset><legend>Gang <span>*</span></legend><div class="radio-row">{#each courses as course}<label><input type="radio" bind:group={newDishCourse} value={course} /> {course}</label>{/each}</div></fieldset>
           <fieldset><legend>Kenmerken</legend><div class="chips selectable">{#each commonTags as tag}<button type="button" class:chosen={newDishTags.includes(tag)} on:click={() => toggleNewTag(tag)}>{tag}</button>{/each}</div></fieldset>
           <label>Toelichting <textarea bind:value={newDishDescription} rows="3" placeholder="Optioneel, bijvoorbeeld een korte beschrijving."></textarea></label>
           <label>Calorieën per 100 gram <input bind:value={newDishCalories} inputmode="decimal" type="number" min="0" step="any" placeholder="Optioneel" /></label>
-          <button class="primary submit" type="submit">{editingDishId ? 'Wijzigingen opslaan' : 'Gerecht opslaan'}</button>
+          <button class="primary submit" type="submit" disabled={savingDish}>{savingDish ? 'Foto opslaan…' : editingDishId ? 'Wijzigingen opslaan' : 'Gerecht opslaan'}</button>
           {#if editingDishId}<button class="secondary submit" type="button" on:click={() => navigate('vers')}>Annuleren</button>{/if}
         </form>
       </section>
