@@ -1,7 +1,7 @@
 # HelpMenu — Design document
 
-**Versie:** 1.1
-**Datum:** 22 september 2026  
+**Versie:** 1.4
+**Datum:** 27 september 2026
 **Status:** vastgesteld — gekozen ontwerprichting: **Vandaag eerst**; eerste online release in gebruik.
 
 ## 1. Doel en uitgangspunt
@@ -122,9 +122,8 @@ De gerechtenlijst heeft een actie **Wijzigen** voor naam, beschrijving, foto, ke
 
 1. Datum en titel: `Wat eten we vandaag?`.
 2. Grote primaire knop: `Maaltijd boeken`.
-3. Blok `In de planner` met maximaal twee eerstvolgende regels en een link `Bekijk alles`.
-4. Blok `Eerst opmaken` wanneer er voorraad is; anders een rustige melding dat de vriezer leeg is.
-5. Kleine snelle acties: `Restjes invriezen` en `Nieuw gerecht`.
+3. Blok `Eerst opmaken` wanneer er voorraad is; anders een rustige melding dat de vriezer leeg is.
+4. Kleine snelle acties: `Restjes invriezen` en `Nieuw gerecht`.
 
 **Voorbeeldinhoud**
 
@@ -134,17 +133,13 @@ Wat eten we vandaag?
 
 [ Maaltijd boeken                                      + ]
 
-In de planner                              Bekijk alles
-🍝 Gnocchi met tomaat       Vers koken
-❄️ Rendang                  Uit de vriezer · 1 portie gereserveerd · 2 personen per portie
-
 Eerst opmaken
 ❄️ Chili sin carne          Ingevroren op 4 september · 2 porties · 2 personen per portie
 
 [ Restjes invriezen ]       [ Nieuw gerecht ]
 ```
 
-**Gedrag:** tikken op een geplande regel opent de boekingsflow met die plannerregel vooringevuld. De voorraadwaarschuwing opent de betreffende voorraadbatch, niet direct een afboeking.
+**Gedrag:** de planner is via de navigatie bereikbaar. De voorraadwaarschuwing opent de betreffende voorraadbatch, niet direct een afboeking.
 
 ### 5.2 Vers
 
@@ -152,18 +147,20 @@ Eerst opmaken
 
 **Opbouw op telefoon**
 
-1. Zoekveld met de tekst `Zoek een gerecht`.
-2. Horizontale filters voor gerechtstype en kenmerken; de actieve filters zijn altijd als tekst zichtbaar.
-3. Resultatenlijst met foto of standaardvlak, naam, gang en kenmerken.
-4. Een vaste actie `Nieuw gerecht`.
+1. Een vaste actie `Nieuw gerecht` direct onder de titel, vóór de zoek- en resultatenlijst.
+2. Zoekveld met de tekst `Zoek een gerecht`.
+3. Twee horizontale filterrijen: eerst gerechtstype en daarna kenmerken; de actieve filters zijn altijd als tekst zichtbaar en kunnen worden gecombineerd.
+4. Resultatenlijst met foto of standaardvlak, naam, gang en kenmerken. Gerechten staan van oudste naar nieuwste laatste eetdatum, gevolgd door nog niet gegeten gerechten. Foto’s openen vergroot met een sluitknop eronder. Een bronfilter Vers/Vriezer biedt bij Vriezer ook een personenfilter.
 
 **Voorbeeldinhoud**
 
 ```text
 Vers
+[ + Nieuw gerecht ]
 [ Zoek een gerecht                                      ⌕ ]
 
-[ Alles ] [ Hoofdgerecht ] [ Rijst ] [ Pasta ]
+[ Alles ] [ Voorgerecht ] [ Hoofdgerecht ] [ Nagerecht ] [ Onderdeel ]
+[ Alles ] [ Rijst ] [ Pasta ]
 
 Gnocchi met tomaat
 Hoofdgerecht · pasta · groente
@@ -173,7 +170,6 @@ Curry met kikkererwten
 Hoofdgerecht · rijst · groente
 [ Nu boeken ]  [ Aan planner toevoegen ]
 
-[ + Nieuw gerecht ]
 ```
 
 **Gedrag:** één tik op de regel opent het gerecht-detail met dezelfde acties. `Aan planner toevoegen` voegt een regel met bron `vers` toe. `Nu boeken` opent de gedeelde boekingsflow.
@@ -185,14 +181,15 @@ Hoofdgerecht · rijst · groente
 **Opbouw op telefoon**
 
 1. Titel `Voorraad` met het totaal aantal beschikbare porties.
-2. Een amberkleurige, tekstuele melding van de oudste batch: `Eerst opmaken`.
-3. Chronologische voorraadregels, oudste eerst.
-4. Een directe actie `Restjes invriezen`.
+2. Een vaste actie `Restjes invriezen` direct onder de titel, vóór de voorraadlijst.
+3. Een amberkleurige, tekstuele melding van de oudste batch: `Eerst opmaken`.
+4. Chronologische voorraadregels, oudste eerst.
 
 **Voorbeeldinhoud**
 
 ```text
 Vriezer                                           8 porties
+[ + Restjes invriezen ]
 
 Eerst opmaken: Chili sin carne van 4 september.
 
@@ -208,7 +205,6 @@ Ingevroren 10 september  1 portie gereserveerd · 2 personen per portie
 Ingevroren 14 september             3 porties vrij · 1 persoon per portie
 [ Nu boeken ]  [ Aan planner toevoegen ]
 
-[ + Restjes invriezen ]
 ```
 
 **Gedrag:** een beschikbare batch kan één portie reserveren bij het toevoegen aan de planner. Een gereserveerde batch biedt geen tweede reserveeractie. `Nu boeken` legt altijd de oudste beschikbare batch vast, of de al gereserveerde batch wanneer de gebruiker vanuit de planner komt.
@@ -267,7 +263,7 @@ Naam *
 [ Pompoensoep                                       ]
 
 Gang *
-( ) Voorgerecht   (•) Hoofdgerecht   ( ) Nagerecht
+( ) Voorgerecht   (•) Hoofdgerecht   ( ) Nagerecht   ( ) Onderdeel
 
 Kenmerken
 [ groente × ] [ vegetarisch × ] [ + Kenmerk kiezen ]

@@ -6,7 +6,7 @@
   import { seedBatches, seedBookings, seedDishes, seedFriendDinners, seedPlanner } from '$lib/seed';
 
   const storageKey = 'helpmenu-local-v1';
-  const courses: Course[] = ['Voorgerecht', 'Hoofdgerecht', 'Nagerecht'];
+  const courses: Course[] = ['Voorgerecht', 'Hoofdgerecht', 'Nagerecht', 'Onderdeel'];
   const commonTags = ['rijst', 'pasta', 'aardappels', 'stamppot', 'groente', 'vlees', 'vegetarisch'];
 
   let screen: Screen = 'vandaag';
@@ -16,7 +16,15 @@
   let bookings = structuredClone(seedBookings);
   let friendDinners: FriendDinner[] = structuredClone(seedFriendDinners);
   let query = '';
+  let activeCourse: Course | '' = '';
   let activeTag = '';
+  let mealSource: Source = 'vers';
+  let mealPeople = '';
+  let freezerCourse: Course | '' = '';
+  let freezerPeople = '';
+  let enlargedPhoto: { url: string; name: string } | null = null;
+  let photoDialog: HTMLDialogElement;
+  $: if (enlargedPhoto && photoDialog && !photoDialog.open) photoDialog.showModal();
   let toast = '';
   let booking: { dishId: string; source: Source; plannerId?: string; batchId?: string } | null = null;
   let bookingEaten = true;
@@ -117,15 +125,39 @@
     if (onlineStatus === 'authenticated' && snapshot !== lastSyncedSnapshot) scheduleSync(snapshot);
   }
   $: availableDishes = dishes.filter((dish) => !dish.archived);
-  $: filteredDishes = availableDishes.filter((dish) => {
-    const matchesQuery = dish.name.toLowerCase().includes(query.trim().toLowerCase());
-    const matchesTag = !activeTag || dish.tags.includes(activeTag);
-    return matchesQuery && matchesTag;
-  });
+  $: lastEatenDates = bookings.reduce<Record<string, string>>((dates, booking) => {
+    if (booking.type === 'ingevroren') return dates;
+    if (!dates[booking.dishId] || booking.eatenAt > dates[booking.dishId]) dates[booking.dishId] = booking.eatenAt;
+    return dates;
+  }, {});
+  $: filteredDishes = availableDishes
+    .filter((dish) => {
+      const matchesQuery = dish.name.toLowerCase().includes(query.trim().toLowerCase());
+      const matchesCourse = !activeCourse || dish.course === activeCourse;
+      const matchesTag = !activeTag || dish.tags.includes(activeTag);
+      return matchesQuery && matchesCourse && matchesTag;
+    })
+    .map((dish, index) => ({ dish, index, lastEatenAt: lastEatenDates[dish.id] }))
+    .sort((first, second) => {
+      if (Boolean(first.lastEatenAt) !== Boolean(second.lastEatenAt)) return first.lastEatenAt ? -1 : 1;
+      return (first.lastEatenAt ?? '').localeCompare(second.lastEatenAt ?? '') || first.index - second.index;
+    })
+    .map(({ dish }) => dish);
   $: freezerBatches = [...batches].filter((batch) => batch.available > 0).sort((a, b) => a.frozenAt.localeCompare(b.frozenAt));
   $: oldestBatch = freezerBatches[0];
   $: activePlanner = planner.slice(0, 7);
-  $: plannerPreview = activePlanner.slice(0, 2);
+  $: peopleOptions = [...new Set(freezerBatches.map((batch) => batch.peoplePerPortion))].sort((a, b) => a - b);
+  $: filteredFreezerBatches = freezerBatches.filter((batch) =>
+    (!freezerCourse || getDish(batch.dishId)?.course === freezerCourse) &&
+    (!freezerPeople || batch.peoplePerPortion === Number(freezerPeople)));
+  $: mealBatches = freezerBatches.filter((batch) => {
+    const dish = getDish(batch.dishId);
+    return dish && !dish.archived && freePortions(batch) > 0 &&
+      dish.name.toLowerCase().includes(query.trim().toLowerCase()) &&
+      (!activeCourse || dish.course === activeCourse) &&
+      (!activeTag || dish.tags.includes(activeTag)) &&
+      (!mealPeople || batch.peoplePerPortion === Number(mealPeople));
+  });
   $: filteredLeftoversDishes = availableDishes.filter((dish) =>
     (!leftoversCourseFilter || dish.course === leftoversCourseFilter) &&
     (!leftoversTagFilter || dish.tags.includes(leftoversTagFilter))
@@ -156,9 +188,8 @@
     return batchId ? batches.find((batch) => batch.id === batchId)?.peoplePerPortion : undefined;
   }
 
-  function lastEatenLabel(dishId: string) {
-    const dates = bookings.filter((booking) => booking.dishId === dishId && booking.type !== 'ingevroren').map((booking) => booking.eatenAt).sort((first, second) => second.localeCompare(first));
-    return dates[0] ? `Laatst gegeten: ${formatDate(dates[0])}` : 'Nog niet gegeten';
+  function lastEatenLabel(date?: string) {
+    return date ? `Laatst gegeten: ${formatDate(date)}` : 'Nog niet gegeten';
   }
 
   function stateSnapshot() {
@@ -357,7 +388,7 @@
     if (name.length > 20) return showToast('De naam van een gerecht mag maximaal 20 karakters hebben.');
     const calories = newDishCalories === '' ? undefined : Number(newDishCalories);
     if (calories !== undefined && (!Number.isFinite(calories) || calories < 0)) return showToast('Vul een geldig aantal calorieën in.');
-    const emoji = newDishCourse === 'Nagerecht' ? '🍰' : newDishCourse === 'Voorgerecht' ? '🥣' : '🍲';
+    const emoji = newDishCourse === 'Nagerecht' ? '🍰' : newDishCourse === 'Voorgerecht' ? '🥣' : newDishCourse === 'Onderdeel' ? '🥘' : '🍲';
     const previous = editingDishId ? getDish(editingDishId) : undefined;
     if (editingDishId && (!previous || previous.archived)) return showToast('Dit gerecht is niet meer beschikbaar. Open de gerechtenlijst opnieuw.');
     savingDish = true;
@@ -377,7 +408,7 @@
       if (JSON.stringify({ dishes: nextDishes, batches, planner, bookings, friendDinners }).length > 1_900_000) throw new Error('De gedeelde gegevenslijst is te groot. Neem contact op voor hulp.');
       dishes = nextDishes;
       resetDishForm();
-      query = ''; activeTag = '';
+      query = ''; activeCourse = ''; activeTag = '';
       requestConfirmation(previous ? `${dish.name} is gewijzigd.` : `${dish.name} is toegevoegd aan je gerechten.`);
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Gerecht opslaan mislukt. Probeer het opnieuw.');
@@ -506,23 +537,6 @@
         <h1 id="today-title">Wat eten we vandaag?</h1>
         <button class="primary action" on:click={() => navigate('vers')}>Maaltijd boeken <span>＋</span></button>
 
-        <div class="section-heading"><h2>In de planner</h2><button class="text-button" on:click={() => navigate('planner')}>Bekijk alles</button></div>
-        {#if plannerPreview.length}
-          <div class="list">
-            {#each plannerPreview as entry}
-              {@const dish = getDish(entry.dishId)}
-              {#if dish}
-                <button class="item" on:click={() => openBooking(dish.id, entry.source, entry.id, entry.batchId)}>
-                  <span class="dish-icon {entry.source}">{entry.source === 'vriezer' ? '❄' : dish.emoji}</span>
-                  <span><strong>{dish.name}</strong><small>{sourceLabel(entry.source)}{entry.source === 'vriezer' ? ` · 1 portie gereserveerd · ${peopleLabel(peopleForBatch(entry.batchId) ?? 1)}` : ''}</small></span><b>›</b>
-                </button>
-              {/if}
-            {/each}
-          </div>
-        {:else}
-          <div class="empty">Nog niets gepland. Kies een gerecht voor later.</div>
-        {/if}
-
         <div class="section-heading"><h2>Eerst opmaken</h2><button class="text-button" on:click={() => navigate('vriezer')}>Vriezer</button></div>
         {#if oldestBatch}
           {@const oldestDish = getDish(oldestBatch.dishId)}
@@ -543,35 +557,55 @@
     {:else if screen === 'vers'}
       <section class="page" aria-labelledby="fresh-title">
         <div class="title-row"><div><p class="eyebrow">Gerechten</p><h1 id="fresh-title">Mijn gerechten</h1></div><span class="count">{availableDishes.length}</span></div>
+        <button class="primary top-action" on:click={() => navigate('nieuw')}>＋ Nieuw gerecht</button>
+        <div class="chips" aria-label="Filter op maaltijdbron">
+          <button class:chosen={mealSource === 'vers'} on:click={() => mealSource = 'vers'}>Vers</button>
+          <button class:chosen={mealSource === 'vriezer'} on:click={() => mealSource = 'vriezer'}>Vriezer</button>
+        </div>
+        {#if mealSource === 'vriezer'}<label class="people-filter">Aantal personen per portie<select bind:value={mealPeople}><option value="">Alle aantallen</option>{#each peopleOptions as people}<option value={String(people)}>{people} {people === 1 ? 'persoon' : 'personen'}</option>{/each}</select></label>{/if}
         <label class="search"><span class="sr-only">Zoek een gerecht</span><span>⌕</span><input bind:value={query} placeholder="Zoek een gerecht" /></label>
+        <div class="chips" aria-label="Filter op gerechtstype">
+          <button class:chosen={!activeCourse} on:click={() => activeCourse = ''}>Alles</button>
+          {#each courses as course}<button class:chosen={activeCourse === course} on:click={() => activeCourse = course}>{course}</button>{/each}
+        </div>
         <div class="chips" aria-label="Filter op kenmerk">
           <button class:chosen={!activeTag} on:click={() => activeTag = ''}>Alles</button>
           {#each commonTags as tag}<button class:chosen={activeTag === tag} on:click={() => activeTag = tag}>{tag}</button>{/each}
         </div>
+        {#if mealSource === 'vers'}
         <div class="dish-grid">
           {#each filteredDishes as dish}
             <article class="dish-card">
-              <div class="dish-art" aria-hidden="true">{#if dish.photoData}<img src={dish.photoData} alt="" />{:else}{dish.emoji}{/if}</div>
-              <div class="dish-card-content"><h2>{dish.name}</h2><p>{dish.course} · {dish.tags.join(' · ') || 'zonder kenmerken'}</p><small>{lastEatenLabel(dish.id)}</small></div>
+              {#if dish.photoData}<button class="dish-art photo-open" aria-label={`Foto van ${dish.name} vergroten`} on:click={() => enlargedPhoto = { url: dish.photoData!, name: dish.name }}><img src={dish.photoData} alt={dish.name} /></button>{:else}<div class="dish-art" aria-hidden="true">{dish.emoji}</div>{/if}
+              <div class="dish-card-content"><h2>{dish.name}</h2><p>{dish.course} · {dish.tags.join(' · ') || 'zonder kenmerken'}</p><small>{lastEatenLabel(lastEatenDates[dish.id])}</small></div>
               <div class="card-actions"><button class="secondary" on:click={() => openBooking(dish.id, 'vers')}>Nu boeken</button><button class="icon-button" title="Aan planner toevoegen" on:click={() => addToPlanner(dish, 'vers')}>＋<span class="sr-only">Aan planner toevoegen</span></button><button class="secondary" on:click={() => editDish(dish)}>Wijzigen</button><button class="delete-button" on:click={() => deleteDish(dish)}>Verwijderen</button></div>
             </article>
           {:else}<div class="empty">Geen gerechten gevonden. Pas je filter aan of voeg een nieuw gerecht toe.</div>{/each}
         </div>
-        <button class="primary floating" on:click={() => navigate('nieuw')}>＋ Nieuw gerecht</button>
+        {:else}
+          <div class="list">
+            {#each mealBatches as batch}
+              {@const dish = getDish(batch.dishId)}
+              {#if dish}<article class="item freezer-item"><span class="dish-icon vriezer">❄</span><span><strong>{dish.name}</strong><small>Ingevroren {formatDate(batch.frozenAt)} · {peopleLabel(batch.peoplePerPortion)} · {freePortions(batch)} vrij</small></span><button class="secondary" on:click={() => openBooking(dish.id, 'vriezer', undefined, batch.id)}>Nu boeken</button></article>{/if}
+            {:else}<div class="empty">Geen beschikbare vriesporties gevonden. Pas je filters aan.</div>{/each}
+          </div>
+        {/if}
       </section>
     {:else if screen === 'vriezer'}
       <section class="page" aria-labelledby="freezer-title">
         <div class="title-row"><div><p class="eyebrow">Vriezer</p><h1 id="freezer-title">Voorraad</h1></div><span class="count">{freezerBatches.reduce((sum, batch) => sum + batch.available, 0)} porties</span></div>
+        <button class="primary top-action" on:click={() => navigate('restjes')}>＋ Restjes invriezen</button>
+        <div class="chips" aria-label="Filter vriezer op gerechtstype"><button class:chosen={!freezerCourse} on:click={() => freezerCourse = ''}>Alles</button>{#each courses as course}<button class:chosen={freezerCourse === course} on:click={() => freezerCourse = course}>{course}</button>{/each}</div>
+        <label class="people-filter">Aantal personen per portie<select bind:value={freezerPeople}><option value="">Alle aantallen</option>{#each peopleOptions as people}<option value={String(people)}>{people} {people === 1 ? 'persoon' : 'personen'}</option>{/each}</select></label>
         {#if oldestBatch}{@const dish = getDish(oldestBatch.dishId)}{#if dish}<p class="notice">Eerst opmaken: <strong>{dish.name}</strong> van {formatDate(oldestBatch.frozenAt)}.</p>{/if}{/if}
         <div class="list">
-          {#each freezerBatches as batch}
+          {#each filteredFreezerBatches as batch}
             {@const dish = getDish(batch.dishId)}
             {#if dish}
               <article class="item freezer-item"><span class="dish-icon vriezer">❄</span><span><strong>{dish.name}</strong><small>Ingevroren {formatDate(batch.frozenAt)} · {peopleLabel(batch.peoplePerPortion)}</small></span><span class="portion">{freePortions(batch)} vrij{reservationsFor(batch.id) ? ` · ${reservationsFor(batch.id)} gereserveerd` : ''}</span><div class="row-actions"><button class="secondary" on:click={() => openBooking(dish.id, 'vriezer', undefined, batch.id)}>Boeken</button><button class="icon-button" title="Aan planner toevoegen" on:click={() => addToPlanner(dish, 'vriezer', batch)}>＋<span class="sr-only">Aan planner toevoegen</span></button></div></article>
             {/if}
-          {:else}<div class="empty">Nog geen porties in de vriezer.</div>{/each}
+          {:else}<div class="empty">Geen vriesporties gevonden. Pas je filters aan of vries restjes in.</div>{/each}
         </div>
-        <button class="primary floating" on:click={() => navigate('restjes')}>＋ Restjes invriezen</button>
       </section>
     {:else if screen === 'planner'}
       <section class="page" aria-labelledby="planner-title">
@@ -640,8 +674,15 @@
   </nav>
 </div>
 
+{#if enlargedPhoto}
+  <dialog class="photo-dialog" bind:this={photoDialog} on:close={() => enlargedPhoto = null} aria-label={`Foto van ${enlargedPhoto.name}`}>
+    <img src={enlargedPhoto.url} alt={enlargedPhoto.name} />
+    <button class="primary" on:click={() => photoDialog.close()}>Foto sluiten</button>
+  </dialog>
+{/if}
+
 {#if plannerSourceChoiceOpen}
-  <div class="modal-backdrop" role="presentation"><div class="modal choice-modal" role="dialog" aria-modal="true" aria-labelledby="planner-choice-title"><button class="close" aria-label="Sluiten" on:click={() => plannerSourceChoiceOpen = false}>×</button><p class="eyebrow">Planner</p><h2 id="planner-choice-title">Wat wil je toevoegen?</h2><p class="hint">Kies eerst de bron van de maaltijd.</p><div class="choice-actions"><button class="primary" on:click={() => { plannerSourceChoiceOpen = false; navigate('vers'); }}>Vers koken</button><button class="secondary" on:click={() => { plannerSourceChoiceOpen = false; navigate('vriezer'); }}>Uit de vriezer</button></div></div></div>
+  <div class="modal-backdrop" role="presentation"><div class="modal choice-modal" role="dialog" aria-modal="true" aria-labelledby="planner-choice-title"><button class="close" aria-label="Sluiten" on:click={() => plannerSourceChoiceOpen = false}>×</button><p class="eyebrow">Planner</p><h2 id="planner-choice-title">Wat wil je toevoegen?</h2><p class="hint">Kies eerst de bron van de maaltijd.</p><div class="choice-actions"><button class="primary" on:click={() => { plannerSourceChoiceOpen = false; mealSource = 'vers'; navigate('vers'); }}>Vers koken</button><button class="secondary" on:click={() => { plannerSourceChoiceOpen = false; navigate('vriezer'); }}>Uit de vriezer</button></div></div></div>
 {/if}
 
 {#if booking}
@@ -673,8 +714,6 @@
   .topbar { height: 66px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
   .brand, .mobile-brand { border: 0; background: transparent; color: #1253a4; font-size: 19px; font-weight: 760; letter-spacing: -.04em; padding: 8px 0; }
   .brand span, .mobile-brand span { display: inline-grid; place-items: center; width: 24px; height: 24px; background: #1253a4; color: #fff; border-radius: 8px; font-size: 14px; letter-spacing: 0; }
-  .avatar { display: grid; place-items: center; width: 34px; height: 34px; background: #f4e3bd; border-radius: 50%; color: #493a1e; font-size: 12px; font-weight: 750; }
-  .local-label { margin-left: auto; margin-right: 11px; border-radius: 999px; padding: 4px 8px; background: #e7f1ff; color: #1253a4; font-size: 11px; font-weight: 700; }
   .account-button { border: 0; background: transparent; color: #1253a4; font-size: 12px; font-weight: 700; }
   .sync-status { display: flex; align-items: center; gap: 6px; margin-left: auto; border-radius: 999px; background: #e7f1ff; color: #1253a4; padding: 5px 8px; font-size: 11px; font-weight: 700; white-space: nowrap; }
   .sync-status.warning { background: #fff1d4; color: #8a5811; }
@@ -687,6 +726,15 @@
   .primary { border: 0; border-radius: 13px; background: #1253a4; color: #fff; font-weight: 730; min-height: 48px; padding: 12px 16px; }
   .primary:disabled { cursor: not-allowed; opacity: .5; }
   .action { width: 100%; display: flex; justify-content: space-between; align-items: center; font-size: 16px; }
+  .home { padding-top: 14px; }
+  .home .quick-actions { margin-top: 24px; }
+  .photo-open { border: 0; padding: 0; cursor: zoom-in; width: 100%; }
+  .photo-dialog { width: min(92vw, 800px); max-height: 90dvh; border: 0; border-radius: 16px; padding: 16px; background: #fff; }
+  .photo-dialog::backdrop { background: #10233ccc; }
+  .photo-dialog img { display: block; width: 100%; max-height: 70dvh; object-fit: contain; border-radius: 10px; }
+  .photo-dialog button { display: block; width: 100%; margin-top: 14px; }
+  .people-filter { margin: 12px 0 18px; }
+  .people-filter select { width: 100%; }
   .action span { font-size: 24px; line-height: 18px; }
   .section-heading { display: flex; align-items: center; justify-content: space-between; margin: 28px 0 10px; }
   .text-button { border: 0; background: transparent; color: #1253a4; font-size: 13px; font-weight: 700; padding: 6px 0; }
@@ -723,6 +771,7 @@
   .secondary { min-height: 36px; border: 1px solid #b8c8dc; border-radius: 9px; background: #fff; color: #1253a4; padding: 6px 10px; font-size: 12px; font-weight: 730; }
   .delete-button { min-height: 36px; margin-left: auto; border: 0; border-radius: 9px; background: transparent; color: #a23e45; padding: 6px 8px; font-size: 12px; font-weight: 700; }
   .icon-button { display: grid; flex: 0 0 36px; place-items: center; width: 36px; height: 36px; border: 1px solid #b8c8dc; border-radius: 9px; background: #fff; color: #1253a4; font-size: 20px; }
+  .top-action { width: 100%; margin: -4px 0 14px; }
   .floating { width: 100%; margin-top: 20px; }
   .title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
   .count, .portion { flex: 0 0 auto; border-radius: 999px; background: #e7f1ff; color: #174b85; padding: 5px 8px; font-size: 12px; font-weight: 720; }
@@ -783,6 +832,6 @@
   .login-card { width: min(100%, 380px); display: grid; gap: 16px; border: 1px solid #dce3dc; border-radius: 20px; background: #fff; padding: 26px; box-shadow: 0 16px 44px rgba(18,83,164,.12); }
   .login-card h1 { margin: 0; color: #1253a4; font-size: 32px; }.login-card p { margin: -8px 0 0; color: #66736c; font-size: 13px; }.login-mark { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px; background: #1253a4; color: #fff; font-size: 20px; }.login-error { color: #a23e45 !important; margin: -8px 0 !important; }
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
-  @media (min-width: 820px) { .app-shell { display: grid; grid-template-columns: 250px 1fr; } .sidebar { position: fixed; inset: 0 auto 0 0; width: 250px; display: flex; flex-direction: column; gap: 24px; padding: 24px 16px; border-right: 1px solid #dce3dc; background: #fff; } .sidebar .brand { text-align: left; } .sidebar nav { display: grid; gap: 4px; } .sidebar nav button { display: flex; align-items: center; gap: 12px; min-height: 42px; border: 0; border-radius: 10px; background: transparent; color: #526259; padding: 8px 10px; text-align: left; font-size: 14px; } .sidebar nav button.active { background: #e7f1ff; color: #1253a4; font-weight: 750; } .reset { margin-top: auto; border: 0; background: transparent; color: #66736c; font-size: 12px; text-align: left; } main { grid-column: 2; width: min(100%, 900px); max-width: none; padding: 0 36px 48px; } .mobile-brand { display: none; } .bottom-nav { display: none; } .modal-backdrop { place-items: center; } .quick-actions { max-width: 480px; } .dish-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .home { max-width: 620px; } }
+  @media (min-width: 820px) { .app-shell { display: grid; grid-template-columns: 250px 1fr; } .sidebar { position: fixed; inset: 0 auto 0 0; width: 250px; display: flex; flex-direction: column; gap: 24px; padding: 24px 16px; border-right: 1px solid #dce3dc; background: #fff; } .sidebar .brand { text-align: left; } .sidebar nav { display: grid; gap: 4px; } .sidebar nav button { display: flex; align-items: center; gap: 12px; min-height: 42px; border: 0; border-radius: 10px; background: transparent; color: #526259; padding: 8px 10px; text-align: left; font-size: 14px; } .sidebar nav button.active { background: #e7f1ff; color: #1253a4; font-weight: 750; } main { grid-column: 2; width: min(100%, 900px); max-width: none; padding: 0 36px 48px; } .mobile-brand { display: none; } .bottom-nav { display: none; } .modal-backdrop { place-items: center; } .quick-actions { max-width: 480px; } .dish-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .home { max-width: 620px; } }
   @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; scroll-behavior: auto !important; transition-duration: .01ms !important; } }
 </style>

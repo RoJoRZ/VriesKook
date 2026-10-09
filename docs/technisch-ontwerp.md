@@ -1,7 +1,7 @@
 # HelpMenu — Technisch ontwerp
 
-**Versie:** 1.1 — foto-opslag via R2
-**Datum:** 23 september 2026
+**Versie:** 1.2 — foto-opslag via R2 en uitgebreid gerechtstype
+**Datum:** 24 september 2026
 **Status:** online op Cloudflare Workers; dit document onderscheidt de huidige implementatie van de beoogde vervolgstappen.
 
 ## 1. Besluitvoorstel
@@ -82,7 +82,7 @@ De database gebruikt interne unieke identifiers. Eet- en invriesdatums worden al
 
 | Tabel/groep | Belangrijkste gegevens | Doel |
 |---|---|---|
-| `dishes` | naam (maximaal 20 karakters), gang, toelichting, calorieën, foto-sleutel, gearchiveerd | Gerechtenverzameling. |
+| `dishes` | naam (maximaal 20 karakters), gang (`Voorgerecht`, `Hoofdgerecht`, `Nagerecht` of `Onderdeel`), toelichting, calorieën, foto-sleutel, gearchiveerd | Gerechtenverzameling. |
 | `tags` en `dish_tags` | kenmerk, koppeling gerecht–kenmerk | Beheerbare kenmerken en betrouwbare filters. |
 | `freezer_batches` | gerecht, invriesdatum, beschikbare porties, oorspronkelijke hoeveelheid, personen per portie | Eén regel per invriesactie. |
 | `planner_entries` | gerecht, bron vers/vriezer, aanmaakvolgorde, gereserveerde batch | Maximaal zeven actieve geplande maaltijden. |

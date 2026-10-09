@@ -3,7 +3,7 @@ PRAGMA foreign_keys = ON;
 CREATE TABLE IF NOT EXISTS dishes (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL CHECK (length(name) <= 20),
-  course TEXT NOT NULL CHECK (course IN ('Voorgerecht', 'Hoofdgerecht', 'Nagerecht')),
+  course TEXT NOT NULL CHECK (course IN ('Voorgerecht', 'Hoofdgerecht', 'Nagerecht', 'Onderdeel')),
   description TEXT,
   calories_per_100g INTEGER CHECK (calories_per_100g >= 0),
   photo_key TEXT,

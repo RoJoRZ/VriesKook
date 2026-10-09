@@ -1,7 +1,7 @@
 # HelpMenu — Functioneel document
 
-**Versie:** 1.1 — functionele basis en eerste release
-**Datum:** 22 september 2026
+**Versie:** 1.4 — gerechtenlijst, gerechtstypen en filters
+**Datum:** 27 september 2026
 **Status:** vastgesteld; de eerste online release is in gebruik.
 
 ## 1. Doel
@@ -19,14 +19,14 @@ Dit document beschrijft wat de app moet kunnen. Technische keuzes en de technisc
 
 ## 3. Gerechtenverzameling en kookinspiratie
 
-Gebruikers kunnen namen opslaan van gerechten die zij graag koken en goed kennen. Deze verzameling vormt de basis om doorheen te bladeren als zij geen inspiratie hebben. De route **Gerechten** toont de volledige bewaarde lijst; per gerecht is zichtbaar wanneer het voor het laatst is gegeten, of dat het nog niet is gegeten.
+Gebruikers kunnen namen opslaan van gerechten die zij graag koken en goed kennen. Deze verzameling vormt de basis om doorheen te bladeren als zij geen inspiratie hebben. De route **Gerechten** toont de volledige bewaarde lijst; per gerecht is zichtbaar wanneer het voor het laatst is gegeten, of dat het nog niet is gegeten. Gerechten met een laatst-gegeten-datum staan op volgorde van oudste naar nieuwste eetdatum bovenaan; gerechten die alleen zijn ingevroren of nog helemaal niet zijn gegeten volgen daarna. De actie **Nieuw gerecht** staat altijd boven de zoek- en resultatenlijst. Onder het zoekveld staan afzonderlijke filters voor gerechtstype en kenmerken; beide filters kunnen tegelijk worden gebruikt. Ook de actie **Restjes invriezen** staat boven de voorraadlijst van de vriezer.
 
 ### Gegevens per gerecht
 
 | Gegeven | Gewenste functie |
 |---|---|
 | Naam | Verplicht veld van maximaal 20 karakters om het gerecht te herkennen en terug te vinden. |
-| Gerechtstype | Verplicht veld: precies één van voorgerecht, hoofdgerecht of nagerecht. |
+| Gerechtstype | Verplicht veld: precies één van voorgerecht, hoofdgerecht, nagerecht of onderdeel. `Onderdeel` is bedoeld voor losse bereidingen, zoals stoofvlees, die later deel kunnen uitmaken van een groter gerecht. |
 | Kenmerken | Optioneel. Bijvoorbeeld rijst, pasta, aardappels, **stamppot**, groente en vlees. Eén gerecht kan meerdere kenmerken hebben. Kenmerken worden gekozen uit een vaste, beheerbare gedeelde lijst om betrouwbaar te kunnen filteren. |
 | Calorieën per 100 gram | Optioneel veld dat later kan worden toegevoegd of gewijzigd. In de eerste versie zijn er geen automatische voedingsberekeningen. |
 
@@ -144,3 +144,7 @@ Het overzicht van etentjes legt aanvullend vast voor welke vrienden op een bepaa
 ## 11. Buiten scope van de eerste versie
 
 Automatische planningsvoorstellen, een boodschappenlijst, voedingsberekeningen en volledige recepten maken geen deel uit van de eerste versie. Ook een afzonderlijk contact- of groepenbeheer voor vrienden is buiten scope.
+
+### Wijzigingen 9 oktober 2026
+
+Gerechtfoto’s openen bij aanklikken vergroot in een kader met een sluitknop eronder. Maaltijd boeken biedt een bronfilter Vers/Vriezer; bij Vriezer verschijnt een filter voor personen per portie en alleen vrije porties worden aangeboden. De vriezertab toont onder Restjes invriezen filters voor gerechtstype, inclusief Onderdeel, en personen per portie. Vandaag toont geen plannerregels meer; de Planner blijft via de navigatie bereikbaar.

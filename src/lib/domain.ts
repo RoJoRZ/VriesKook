@@ -1,4 +1,4 @@
-export type Course = 'Voorgerecht' | 'Hoofdgerecht' | 'Nagerecht';
+export type Course = 'Voorgerecht' | 'Hoofdgerecht' | 'Nagerecht' | 'Onderdeel';
 export type Source = 'vers' | 'vriezer';
 export type BookingType = 'gegeten' | 'ingevroren' | 'vriezer';
 export type Screen = 'vandaag' | 'vers' | 'vriezer' | 'planner' | 'nieuw' | 'bewerken' | 'restjes' | 'vrienden';
