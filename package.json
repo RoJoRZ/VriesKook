@@ -9,7 +9,9 @@
     "preview": "vite preview",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "dev:worker": "pnpm build && wrangler dev --local",
-    "cf-typegen": "wrangler types"
+    "cf-typegen": "wrangler types",
+    "test": "node --test tests/*.test.ts",
+    "test:browser": "node tests/friends.browser.cjs"
   },
   "devDependencies": {
     "@sveltejs/adapter-cloudflare": "^7.2.9",

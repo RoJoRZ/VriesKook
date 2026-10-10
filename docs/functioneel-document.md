@@ -104,7 +104,7 @@ Per etentje wordt vastgelegd:
 - **Wat:** de geserveerde gerechten.
 - **Wanneer:** de datum van het etentje.
 
-Dit is een eenvoudig overzicht met een invoerscherm voor wie, wat en wanneer. Bij **wie** worden namen of een groepsomschrijving als vrije tekst vastgelegd; er is in de eerste versie geen apart contact- of groepenbeheer. Voor **wat** worden één of meer bestaande gerechten uit de verzameling gekozen; een optioneel vrij tekstveld biedt ruimte voor bijvoorbeeld een bijgerecht of opmerking. Een afzonderlijk overzicht of zoekfunctie per individuele gast is niet nodig voor deze eerste versie.
+Dit is een eenvoudig overzicht met een invoerscherm voor wie, wat en wanneer. Bij **wie** worden namen of een groepsomschrijving als vrije tekst vastgelegd; gezelschappen worden als groep bewaard, zonder individuele contacten. Per gezelschap wordt de vrije tekst **Lusten niet** vastgelegd en bij volgende etentjes getoond. Voor **wat** worden één of meer bestaande gerechten uit de verzameling gekozen; een optioneel vrij tekstveld biedt ruimte voor bijvoorbeeld een bijgerecht of opmerking. Een afzonderlijk overzicht of zoekfunctie per individuele gast is niet nodig voor deze eerste versie.
 
 ## 8. Gerecht toevoegen
 
@@ -143,8 +143,12 @@ Het overzicht van etentjes legt aanvullend vast voor welke vrienden op een bepaa
 
 ## 11. Buiten scope van de eerste versie
 
-Automatische planningsvoorstellen, een boodschappenlijst, voedingsberekeningen en volledige recepten maken geen deel uit van de eerste versie. Ook een afzonderlijk contact- of groepenbeheer voor vrienden is buiten scope.
+Automatische planningsvoorstellen, een boodschappenlijst, voedingsberekeningen en volledige recepten maken geen deel uit van de eerste versie. Afzonderlijk contactbeheer per persoon is buiten scope; gezelschappen en hun groepsvoorkeuren worden wel ondersteund.
 
 ### Wijzigingen 9 oktober 2026
 
 Gerechtfoto’s openen bij aanklikken vergroot in een kader met een sluitknop eronder. Maaltijd boeken biedt een bronfilter Vers/Vriezer; bij Vriezer verschijnt een filter voor personen per portie en alleen vrije porties worden aangeboden. De vriezertab toont onder Restjes invriezen filters voor gerechtstype, inclusief Onderdeel, en personen per portie. Vandaag toont geen plannerregels meer; de Planner blijft via de navigatie bereikbaar.
+
+### Vrienden — implementatie 10 oktober 2026
+
+Vrienden is bereikbaar via een vijfde mobiele navigatieknop met twee poppetjes en het label Vrienden, en via de desktopzijbalk. Een gezelschap heeft een naam en optioneel Lusten niet. Etentjes verwijzen naar een gezelschap, datum, één of meer gerechten en optionele toelichting. Gezelschappen en etentjes kunnen worden toegevoegd en gewijzigd; verwijderen is niet opgenomen. Het overzicht kan op gezelschap worden gefilterd, op naam/gerecht/toelichting worden doorzocht en in beide datumvolgordes worden getoond. Gerechten hebben zoek-, type- en kenmerkfilters; gekozen gerechten blijven behouden als een filter ze tijdelijk verbergt. Archiefgerechten blijven bij bestaande etentjes zichtbaar en behouden. Registreren boekt geen maaltijd en verandert geen vriesvoorraad.

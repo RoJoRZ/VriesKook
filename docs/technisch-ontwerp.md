@@ -155,3 +155,13 @@ Offline schermcache is onderdeel van de PWA, maar wijzigingen in planner en voor
 Een kleine EU-VPS met SQLite blijft het alternatief wanneer Cloudflare-afhankelijkheid of wereldwijde Worker-uitvoering niet gewenst is. Dit geeft maximale controle over locatie en uitvoering, maar kost ongeveer €5–8 per maand en vereist serveronderhoud, HTTPS-configuratie en back-upbeheer.
 
 Voor de huidige omvang is Cloudflare Free de aanbevolen eerste keuze. Een migratie is haalbaar: D1 kan als SQL worden geëxporteerd en R2-foto's kunnen worden gedownload en meegenomen naar de VPS.
+
+## Vriendenuitbreiding — 10 oktober 2026
+
+De actieve gedeelde JSON-staat bevat naast `friendDinners` ook `friendGroups` met `id`, `name` en `dislikes`. Een etentje bevat optioneel `groupId`; `people` blijft als leesbare groepsnaam aanwezig. Bij groepswijzigingen worden gekoppelde `people`-waarden bijgewerkt. De bestaande versiecontrole en synchronisatie gelden ook voor gezelschappen. Nieuwe SQL-tabellen of een productie-datamigratie zijn niet nodig: de genormaliseerde tabellen zijn nog steeds een vervolgontwerp.
+
+`src/lib/friends.ts` migreert oudere JSON-staat bij laden. Exact gelijke groepsnamen na trimmen krijgen dezelfde groep; afwijkende spelling wordt niet geraden. Legacy-IDs worden deterministisch uit de naam afgeleid zodat apparaten dezelfde koppelingen maken. De migratie is idempotent, behoudt datums, gerechten, opmerkingen en bestaande voorkeuren, en schrijft pas mee bij een volgende gewone opslag.
+
+Regressietests: `pnpm test` controleert migratie, gegevensbehoud en bestaande groepen. `pnpm check` en `pnpm build` blijven vereist. Browsercontrole omvat mobiel/desktop, gezelschappen, voorkeuren, etentjes toevoegen/wijzigen, filters, archiefgerechten, herladen en synchronisatie met versiecontrole tussen twee gesimuleerde apparaten.
+
+De herhaalbare browsercontrole staat in `tests/friends.browser.cjs`. Start `pnpm dev` en voer `pnpm test:browser` uit met Playwright en Chromium beschikbaar. Een externe Playwright-installatie kan via `PLAYWRIGHT_MODULE` worden aangewezen; `PLAYWRIGHT_BROWSERS_PATH` wijst zo nodig de browserinstallatie aan. `TEST_BASE_URL` kiest een andere lokale testserver. De test onderschept uitsluitend authenticatie- en stateverzoeken en schrijft geen productiegegevens. Zij controleert ook dubbele groepsnamen en dat een versieconflict de gedeelde voorkeuren niet overschrijft.

@@ -38,7 +38,14 @@ export interface Booking {
   eatenAt: string;
 }
 
+export interface FriendGroup {
+  id: string;
+  name: string;
+  dislikes: string;
+}
+
 export interface FriendDinner {
+  groupId?: string;
   id: string;
   date: string;
   people: string;

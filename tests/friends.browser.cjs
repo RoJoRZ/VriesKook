@@ -1,0 +1,87 @@
+const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const assert = require('node:assert/strict');
+(async () => {
+    const browser = await chromium.launch({ headless: true });
+    for (const width of [390, 1280]) {
+        let remote = { dishes: [{ id: 'lasagne', name: 'Lasagne', course: 'Hoofdgerecht', tags: ['pasta'], emoji: '🍲' }, { id: 'salad', name: 'Salade', course: 'Onderdeel', tags: ['vegetarisch'], emoji: '🍲' }, { id: 'archive', name: 'Oude soep', course: 'Voorgerecht', tags: [], emoji: '🍲', archived: true }], batches: [{ id: 'b', dishId: 'lasagne', frozenAt: '2026-01-01', available: 2, original: 2, peoplePerPortion: 2 }], planner: [], bookings: [], friendDinners: [{ id: 'old', date: '2026-01-01', people: 'Oude vrienden', dishIds: ['archive'], note: 'Historie behouden' }] };
+        let version = 1;
+        const errors = [];
+        async function device() { const p = await browser.newPage({ viewport: { width, height: 1000 } }); p.on('pageerror', e => errors.push(e.message)); await p.route('**/api/auth/status', r => r.fulfill({ json: { authenticated: true } })); await p.route('**/api/state', async (r) => { if (r.request().method() === 'GET')
+            return r.fulfill({ json: { state: remote, version } }); const body = r.request().postDataJSON(); if (body.version !== version)
+            return r.fulfill({ status: 409, json: { error: 'conflict' } }); remote = body.state; version++; return r.fulfill({ json: { saved: true, version } }); }); await p.goto(process.env.TEST_BASE_URL || 'http://127.0.0.1:5173'); await p.getByText('Gesynchroniseerd', { exact: true }).waitFor(); await p.locator(width < 820 ? '.bottom-nav' : '.sidebar nav').getByRole('button', { name: 'Vrienden', exact: true }).click(); return p; }
+        const p = await device(), p2 = await device();
+        async function saved() { await p.getByRole('button', { name: 'Terug naar Vrienden', exact: true }).click(); await p.getByText('Gesynchroniseerd', { exact: true }).waitFor(); }
+        assert.match(await p.locator('.dinner').innerText(), /Oude soep/);
+        await p.getByRole('button', { name: '＋ Gezelschap', exact: true }).click();
+        await p.getByLabel('Naam gezelschap').fill('Noor en Sjoerd');
+        await p.getByLabel('Lusten niet', { exact: true }).fill('Champignons en blauwe kaas');
+        await p.getByRole('button', { name: 'Gezelschap opslaan', exact: true }).click();
+        await saved();
+        const group = remote.friendGroups.find(g => g.name === 'Noor en Sjoerd');
+        assert(group);
+        assert.equal(remote.friendDinners[0].dishIds[0], 'archive');
+        await p.getByRole('button', { name: '＋ Etentje toevoegen', exact: true }).click();
+        assert.match(await p.locator('form.friend-form').innerText(), /Champignons en blauwe kaas/);
+        await p.getByLabel('Wanneer').fill('2026-10-10');
+        await p.locator('form.friend-form').getByLabel('Gerechtstype').selectOption('Onderdeel');
+        await p.getByRole('button', { name: '＋ Salade', exact: true }).click();
+        await p.locator('form.friend-form').getByLabel('Gerechtstype').selectOption('');
+        await p.getByLabel('Gerechten zoeken').fill('las');
+        await p.getByRole('button', { name: '＋ Lasagne', exact: true }).click();
+        await p.getByLabel('Toelichting').fill('Met brood');
+        await p.getByRole('button', { name: 'Etentje opslaan', exact: true }).click();
+        await saved();
+        assert.equal(remote.friendDinners.length, 2);
+        assert.deepEqual(remote.friendDinners.find(d => d.groupId === group.id).dishIds, ['salad', 'lasagne']);
+        assert.equal(remote.bookings.length, 0);
+        assert.equal(remote.batches[0].available, 2);
+        await p.getByRole('button', { name: 'Etentje van 10 oktober 2026 wijzigen', exact: true }).click();
+        await p.getByLabel('Wanneer').fill('2026-09-15');
+        await p.getByRole('button', { name: 'Etentje opslaan', exact: true }).click();
+        await saved();
+        assert.equal(remote.friendDinners.length, 2);
+        assert.equal(remote.friendDinners.find(d => d.groupId === group.id).date, '2026-09-15');
+        await p.getByRole('button', { name: 'Gezelschap wijzigen', exact: true }).click();
+        await p.getByLabel('Lusten niet', { exact: true }).fill('Geen vis');
+        await p.getByRole('button', { name: 'Gezelschap opslaan', exact: true }).click();
+        await saved();
+        await p2.evaluate(() => window.dispatchEvent(new Event('focus')));
+        await p2.getByLabel('Gezelschap').selectOption(group.id);
+        await p2.locator('.friend-preferences').filter({ hasText: 'Geen vis' }).waitFor();
+        assert.match(await p2.locator('.dinner').innerText(), /Lasagne/);
+        await p.getByLabel('Gezelschap').selectOption('');
+        await p.getByLabel('Volgorde').selectOption('oldest');
+        assert.match(await p.locator('.dinner').first().innerText(), /Oude soep/);
+        await p.getByLabel('Zoek in etentjes').fill('onvindbaar');
+        assert.equal(await p.locator('.dinner').count(), 0);
+        await p.getByLabel('Zoek in etentjes').fill('');
+        await p.getByRole('button', { name: 'Etentje van 1 januari 2026 wijzigen', exact: true }).click();
+        assert.match(await p.locator('.dish-picker').innerText(), /Oude soep \(archief\)/);
+        await p.getByRole('button', { name: 'Etentje opslaan', exact: true }).click();
+        await saved();
+        assert.deepEqual(remote.friendDinners.find(d => d.id === 'old').dishIds, ['archive']);
+        await p.reload();
+        await p.getByText('Gesynchroniseerd', { exact: true }).waitFor();
+        await p.locator(width < 820 ? '.bottom-nav' : '.sidebar nav').getByRole('button', { name: 'Vrienden', exact: true }).click();
+        await p.getByLabel('Gezelschap').selectOption(group.id);
+        await p.locator('.friend-preferences').filter({ hasText: 'Geen vis' }).waitFor();
+        await p.getByRole('button', { name: '＋ Gezelschap', exact: true }).click();
+        await p.getByLabel('Naam gezelschap').fill('Noor en Sjoerd');
+        await p.getByRole('button', { name: 'Gezelschap opslaan', exact: true }).click();
+        await p.getByRole('status').filter({ hasText: 'bestaat al' }).waitFor();
+        assert.equal(remote.friendGroups.length, 2);
+        await p.getByRole('button', { name: 'Annuleren', exact: true }).click();
+        await p.getByRole('button', { name: 'Gezelschap wijzigen', exact: true }).click();
+        await p.getByLabel('Lusten niet', { exact: true }).fill('Niet overschrijven');
+        version++;
+        await p.getByRole('button', { name: 'Gezelschap opslaan', exact: true }).click();
+        await p.getByText('Wijzigingen afstemmen', { exact: true }).waitFor();
+        assert.equal(remote.friendGroups.find(g => g.id === group.id).dislikes, 'Geen vis');
+        assert.equal(await p.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+        assert.deepEqual(errors, []);
+        await p.close();
+        await p2.close();
+        console.log(`PASS ${width}px: legacy data, groups, preferences, create/edit, filters, archived dishes, two-device sync, reload, inventory unchanged, duplicates rejected, conflict prevents overwrite`);
+    }
+    await browser.close();
+})().catch(e => { console.error(e); process.exit(1); });

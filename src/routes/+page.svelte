@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import type { Course, Dish, FreezerBatch, FriendDinner, PlannerEntry, Screen, Source } from '$lib/domain';
+  import type { Course, Dish, FreezerBatch, FriendDinner, FriendGroup, PlannerEntry, Screen, Source } from '$lib/domain';
+  import { migrateFriends } from '$lib/friends';
   import { formatDate, today, uid } from '$lib/domain';
   import { dishRemovalBlocker, removeDishPreservingHistory } from '$lib/dish-lifecycle';
   import { seedBatches, seedBookings, seedDishes, seedFriendDinners, seedPlanner } from '$lib/seed';
@@ -49,7 +50,20 @@
   let savingDish = false;
   let editingDishId: string | null = null;
   let dinnerDate = today();
-  let dinnerPeople = '';
+  let friendGroups: FriendGroup[] = [];
+  let dinnerGroupId = '';
+  let friendsGroupFilter = '';
+  let friendsQuery = '';
+  let friendsOrder = 'newest';
+  let dinnerFormOpen = false;
+  let editingDinnerId: string | null = null;
+  let groupFormOpen = false;
+  let editingGroupId: string | null = null;
+  let groupName = '';
+  let groupDislikes = '';
+  let dinnerQuery = '';
+  let dinnerCourse: Course | '' = '';
+  let dinnerTag = '';
   let dinnerNote = '';
   let dinnerDishIds: string[] = [];
   let hydrating = true;
@@ -100,7 +114,9 @@
         batches = state.batches ?? batches;
         planner = state.planner ?? planner;
         bookings = state.bookings ?? bookings;
-        friendDinners = state.friendDinners ?? friendDinners;
+        const friends = migrateFriends(state.friendDinners ?? [], state.friendGroups ?? []);
+        friendDinners = friends.dinners;
+        friendGroups = friends.groups;
       } catch {
         localStorage.removeItem(storageKey);
       }
@@ -117,7 +133,7 @@
     localSnapshot = snapshot;
   }
 
-  $: snapshot = JSON.stringify({ dishes, batches, planner, bookings, friendDinners });
+  $: snapshot = JSON.stringify({ dishes, batches, planner, bookings, friendDinners, friendGroups });
   $: syncText = syncStatus === 'saving' ? 'Opslaan…' : syncStatus === 'offline' ? 'Niet gesynchroniseerd' : syncStatus === 'conflict' ? 'Wijzigingen afstemmen' : syncStatus === 'local' ? 'Alleen dit apparaat' : syncStatus === 'synced' ? 'Gesynchroniseerd' : 'Verbinden…';
   $: if (!hydrating && snapshot !== localSnapshot) {
     localSnapshot = snapshot;
@@ -125,6 +141,19 @@
     if (onlineStatus === 'authenticated' && snapshot !== lastSyncedSnapshot) scheduleSync(snapshot);
   }
   $: availableDishes = dishes.filter((dish) => !dish.archived);
+  $: selectedFriendGroup = friendGroups.find((group) => group.id === friendsGroupFilter);
+  $: dinnerGroup = friendGroups.find((group) => group.id === dinnerGroupId);
+  $: filteredDinners = friendDinners.filter((dinner) =>
+    (!friendsGroupFilter || dinner.groupId === friendsGroupFilter) &&
+    [friendGroups.find((group) => group.id === dinner.groupId)?.name ?? dinner.people,
+      dinner.note ?? '', ...dinner.dishIds.map((id) => getDish(id)?.name ?? '')]
+      .join(' ').toLowerCase().includes(friendsQuery.trim().toLowerCase()))
+    .slice().sort((a, b) => friendsOrder === 'newest' ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date));
+  $: dinnerDishChoices = dishes.filter((dish) =>
+    (!dish.archived || dinnerDishIds.includes(dish.id)) &&
+    dish.name.toLowerCase().includes(dinnerQuery.trim().toLowerCase()) &&
+    (!dinnerCourse || dish.course === dinnerCourse) && (!dinnerTag || dish.tags.includes(dinnerTag)));
+
   $: lastEatenDates = bookings.reduce<Record<string, string>>((dates, booking) => {
     if (booking.type === 'ingevroren') return dates;
     if (!dates[booking.dishId] || booking.eatenAt > dates[booking.dishId]) dates[booking.dishId] = booking.eatenAt;
@@ -193,16 +222,18 @@
   }
 
   function stateSnapshot() {
-    return JSON.stringify({ dishes, batches, planner, bookings, friendDinners });
+    return JSON.stringify({ dishes, batches, planner, bookings, friendDinners, friendGroups });
   }
 
-  function applyRemoteState(payload: { state: { dishes?: Dish[]; batches?: FreezerBatch[]; planner?: PlannerEntry[]; bookings?: typeof bookings; friendDinners?: FriendDinner[] } | null; version: number }) {
+  function applyRemoteState(payload: { state: { dishes?: Dish[]; batches?: FreezerBatch[]; planner?: PlannerEntry[]; bookings?: typeof bookings; friendDinners?: FriendDinner[]; friendGroups?: FriendGroup[] } | null; version: number }) {
     const remote = payload.state;
     dishes = remote?.dishes ?? [];
     batches = remote?.batches ?? [];
     planner = remote?.planner ?? [];
     bookings = remote?.bookings ?? [];
-    friendDinners = remote?.friendDinners ?? [];
+    const friends = migrateFriends(remote?.friendDinners ?? [], remote?.friendGroups ?? []);
+    friendDinners = friends.dinners;
+    friendGroups = friends.groups;
     remoteVersion = payload.version;
     lastSyncedSnapshot = stateSnapshot();
     localSnapshot = lastSyncedSnapshot;
@@ -405,7 +436,7 @@
       }
       const dish: Dish = { ...previous, id: previous?.id ?? uid('dish'), name, course: newDishCourse, tags: [...newDishTags], description: newDishDescription.trim() || undefined, calories, emoji, photoData: photoReference || undefined };
       const nextDishes = previous ? dishes.map((item) => item.id === previous.id ? dish : item) : [...dishes, dish];
-      if (JSON.stringify({ dishes: nextDishes, batches, planner, bookings, friendDinners }).length > 1_900_000) throw new Error('De gedeelde gegevenslijst is te groot. Neem contact op voor hulp.');
+      if (JSON.stringify({ dishes: nextDishes, batches, planner, bookings, friendDinners, friendGroups }).length > 1_900_000) throw new Error('De gedeelde gegevenslijst is te groot. Neem contact op voor hulp.');
       dishes = nextDishes;
       resetDishForm();
       query = ''; activeCourse = ''; activeTag = '';
@@ -421,10 +452,44 @@
     dinnerDishIds = dinnerDishIds.includes(dishId) ? dinnerDishIds.filter((id) => id !== dishId) : [...dinnerDishIds, dishId];
   }
 
+  function openDinner(dinner?: FriendDinner) {
+    editingDinnerId = dinner?.id ?? null;
+    dinnerDate = dinner?.date ?? today();
+    dinnerGroupId = dinner?.groupId ?? friendsGroupFilter ?? '';
+    dinnerNote = dinner?.note ?? '';
+    dinnerDishIds = dinner ? [...dinner.dishIds] : [];
+    dinnerQuery = ''; dinnerCourse = ''; dinnerTag = '';
+    dinnerFormOpen = true;
+  }
+
+  function openGroup(group?: FriendGroup) {
+    editingGroupId = group?.id ?? null;
+    groupName = group?.name ?? '';
+    groupDislikes = group?.dislikes ?? '';
+    groupFormOpen = true;
+  }
+
+  function saveFriendGroup() {
+    const name = groupName.trim();
+    if (!name) return showToast('Vul een naam voor het gezelschap in.');
+    if (friendGroups.some((group) => group.id !== editingGroupId && group.name === name)) return showToast('Een gezelschap met deze naam bestaat al.');
+    const group: FriendGroup = { id: editingGroupId ?? uid('group'), name, dislikes: groupDislikes.trim() };
+    friendGroups = editingGroupId ? friendGroups.map((item) => item.id === group.id ? group : item) : [...friendGroups, group];
+    // Retain a readable name for older app versions and historical records.
+    friendDinners = friendDinners.map((dinner) => dinner.groupId === group.id ? { ...dinner, people: name } : dinner);
+    friendsGroupFilter = group.id;
+    if (dinnerFormOpen) dinnerGroupId = group.id;
+    groupFormOpen = false;
+    requestConfirmation('Gezelschap opgeslagen.');
+  }
+
   function saveFriendDinner() {
-    if (!dinnerPeople.trim() || dinnerDishIds.length === 0) return showToast('Vul in met wie jullie aten en kies minimaal één gerecht.');
-    friendDinners = [{ id: uid('dinner'), date: dinnerDate, people: dinnerPeople.trim(), dishIds: dinnerDishIds, note: dinnerNote.trim() || undefined }, ...friendDinners];
-    dinnerPeople = ''; dinnerNote = ''; dinnerDishIds = []; dinnerDate = today();
+    const group = friendGroups.find((item) => item.id === dinnerGroupId);
+    if (!group || !/^\d{4}-\d{2}-\d{2}$/.test(dinnerDate) || dinnerDishIds.length === 0) return showToast('Kies een gezelschap, datum en minimaal één gerecht.');
+    const dinner: FriendDinner = { id: editingDinnerId ?? uid('dinner'), groupId: group.id, date: dinnerDate, people: group.name, dishIds: [...dinnerDishIds], note: dinnerNote.trim() || undefined };
+    friendDinners = editingDinnerId ? friendDinners.map((item) => item.id === dinner.id ? dinner : item) : [...friendDinners, dinner];
+    friendsGroupFilter = group.id;
+    dinnerFormOpen = false;
     requestConfirmation('Etentje met vrienden opgeslagen.');
   }
 
@@ -517,7 +582,7 @@
       <button class:active={screen === 'planner'} on:click={() => navigate('planner')}>☷ <span>Planner</span></button>
       <button class:active={screen === 'nieuw'} on:click={() => navigate('nieuw')}>＋ <span>Nieuw gerecht</span></button>
       <button class:active={screen === 'restjes'} on:click={() => navigate('restjes')}>▣ <span>Restjes</span></button>
-      <button class:active={screen === 'vrienden'} on:click={() => navigate('vrienden')}>♧ <span>Vrienden</span></button>
+      <button class:active={screen === 'vrienden'} on:click={() => navigate('vrienden')}><span aria-hidden="true">👥</span> <span>Vrienden</span></button>
     </nav>
   </aside>
 
@@ -657,20 +722,44 @@
       </section>
     {:else if screen === 'vrienden'}
       <section class="page friends" aria-labelledby="friends-title">
-        <p class="eyebrow">Overzicht</p><h1 id="friends-title">Etentjes met vrienden</h1>
-        <form class="friend-form" on:submit|preventDefault={saveFriendDinner}>
-          <h2>Nieuw etentje</h2><label>Wanneer <span>*</span><input bind:value={dinnerDate} type="date" /></label><label>Wie <span>*</span><input bind:value={dinnerPeople} placeholder="Bijv. Anja, Bart en de kinderen" /></label>
-          <fieldset><legend>Wat <span>*</span></legend><div class="dish-picker">{#each availableDishes as dish}<button type="button" class:chosen={dinnerDishIds.includes(dish.id)} on:click={() => toggleDinnerDish(dish.id)}>{dish.emoji} {dish.name}</button>{/each}</div></fieldset>
-          <label>Toelichting <textarea bind:value={dinnerNote} rows="2" placeholder="Optioneel"></textarea></label><button class="primary submit" type="submit">Etentje opslaan</button>
-        </form>
-        <div class="section-heading"><h2>Eerder gekookt</h2></div>
-        <div class="list">{#each friendDinners as dinner}<article class="item dinner"><span class="dish-icon friends-icon">♧</span><span><strong>{dinner.people}</strong><small>{formatDate(dinner.date)} · {dinner.dishIds.map((id) => getDish(id)?.name).filter(Boolean).join(', ')}</small>{#if dinner.note}<em>{dinner.note}</em>{/if}</span></article>{/each}</div>
+        <div class="title-row"><div><p class="eyebrow">Samen aan tafel</p><h1 id="friends-title">Etentjes met vrienden</h1></div></div>
+        <div class="friend-actions"><button class="primary" on:click={() => openDinner()}>＋ Etentje toevoegen</button><button class="secondary" on:click={() => openGroup()}>＋ Gezelschap</button></div>
+        <div class="filter-grid friend-filters">
+          <label>Gezelschap<select bind:value={friendsGroupFilter}><option value="">Alle gezelschappen</option>{#each friendGroups as group}<option value={group.id}>{group.name}</option>{/each}</select></label>
+          <label>Zoek in etentjes<input type="search" bind:value={friendsQuery} placeholder="Bijv. lasagne" /></label>
+        </div>
+        {#if selectedFriendGroup}<div class="friend-preferences"><div class="friend-actions"><strong>{selectedFriendGroup.name}</strong><button class="text-button" on:click={() => openGroup(selectedFriendGroup)}>Gezelschap wijzigen</button></div><p><strong>Lusten niet</strong><br />{selectedFriendGroup.dislikes || 'Geen voorkeuren ingevuld.'}</p></div>{/if}
+        {#if groupFormOpen}
+          <form class="friend-form" on:submit|preventDefault={saveFriendGroup}>
+            <h2>{editingGroupId ? 'Gezelschap wijzigen' : 'Nieuw gezelschap'}</h2>
+            <label>Naam gezelschap <span>*</span><input bind:value={groupName} required maxlength="80" placeholder="Bijv. Noor en Sjoerd" /></label>
+            <label>Lusten niet<textarea bind:value={groupDislikes} maxlength="2000" rows="3" placeholder="Bijv. champignons en blauwe kaas"></textarea></label>
+            <p class="hint">Deze voorkeuren gelden voor het hele gezelschap.</p>
+            <div class="friend-actions"><button class="primary" type="submit">Gezelschap opslaan</button><button class="secondary" type="button" on:click={() => groupFormOpen = false}>Annuleren</button></div>
+          </form>
+        {/if}
+        {#if dinnerFormOpen}
+          <form class="friend-form" on:submit|preventDefault={saveFriendDinner}>
+            <h2>{editingDinnerId ? 'Etentje wijzigen' : 'Nieuw etentje'}</h2>
+            <div class="filter-grid"><label>Gezelschap voor etentje <span>*</span><select bind:value={dinnerGroupId} required><option value="">Kies een gezelschap</option>{#each friendGroups as group}<option value={group.id}>{group.name}</option>{/each}</select></label><label>Wanneer <span>*</span><input bind:value={dinnerDate} type="date" required /></label></div>
+            {#if !friendGroups.length}<p class="notice">Voeg eerst een gezelschap toe via de knop bovenaan.</p>{/if}
+            {#if dinnerGroup}<p class="friend-preferences"><strong>Lusten niet</strong><br />{dinnerGroup.dislikes || 'Geen voorkeuren ingevuld.'}</p>{/if}
+            <label>Gerechten zoeken<input type="search" bind:value={dinnerQuery} placeholder="Zoek een gerecht" /></label>
+            <div class="filter-grid"><label>Gerechtstype<select bind:value={dinnerCourse}><option value="">Alle typen</option>{#each courses as course}<option value={course}>{course}</option>{/each}</select></label><label>Kenmerk<select bind:value={dinnerTag}><option value="">Alle kenmerken</option>{#each commonTags as tag}<option value={tag}>{tag}</option>{/each}</select></label></div>
+            <fieldset><legend>Geserveerde gerechten <span>*</span></legend><div class="dish-picker">{#each dinnerDishChoices as dish}<button type="button" class:chosen={dinnerDishIds.includes(dish.id)} aria-pressed={dinnerDishIds.includes(dish.id)} on:click={() => toggleDinnerDish(dish.id)}>{dinnerDishIds.includes(dish.id) ? '✓' : '＋'} {dish.name}{dish.archived ? ' (archief)' : ''}</button>{:else}<p class="hint">Geen gerechten gevonden met deze filters.</p>{/each}</div></fieldset>
+            <p class="hint">Gekozen: {dinnerDishIds.map((id) => getDish(id)?.name).filter(Boolean).join(', ') || 'Nog geen gerechten'}</p>
+            <label>Toelichting<textarea bind:value={dinnerNote} maxlength="2000" rows="2" placeholder="Optioneel, bijvoorbeeld een bijgerecht"></textarea></label>
+            <div class="friend-actions"><button class="primary" type="submit">Etentje opslaan</button><button class="secondary" type="button" on:click={() => dinnerFormOpen = false}>Annuleren</button></div>
+          </form>
+        {/if}
+        <div class="section-heading"><h2>Eerder gegeten</h2><label>Volgorde<select bind:value={friendsOrder}><option value="newest">Nieuwste eerst</option><option value="oldest">Oudste eerst</option></select></label></div>
+        <div class="list">{#each filteredDinners as dinner}<article class="item dinner"><span class="dish-icon friends-icon" aria-hidden="true">👥</span><span><strong>{friendGroups.find((group) => group.id === dinner.groupId)?.name ?? dinner.people}</strong><small>{formatDate(dinner.date)} · {dinner.dishIds.map((id) => getDish(id)?.name).filter(Boolean).join(', ')}</small>{#if dinner.note}<em>{dinner.note}</em>{/if}</span><button class="secondary" aria-label={`Etentje van ${formatDate(dinner.date)} wijzigen`} on:click={() => openDinner(dinner)}>Wijzigen</button></article>{:else}<div class="empty">{friendDinners.length ? 'Geen etentjes gevonden. Pas je filters aan.' : 'Nog geen etentjes. Voeg een gezelschap en jullie eerste etentje toe.'}</div>{/each}</div>
       </section>
     {/if}
   </main>
 
   <nav class="bottom-nav" aria-label="Hoofdnavigatie">
-    <button class:active={screen === 'vandaag'} on:click={() => navigate('vandaag')}>⌂<span>Vandaag</span></button><button class:active={screen === 'vers' || screen === 'bewerken'} on:click={() => navigate('vers')}>⌕<span>Gerechten</span></button><button class:active={screen === 'vriezer'} on:click={() => navigate('vriezer')}>❄<span>Vriezer</span></button><button class:active={screen === 'planner'} on:click={() => navigate('planner')}>☷<span>Planner</span></button>
+    <button class:active={screen === 'vandaag'} on:click={() => navigate('vandaag')}>⌂<span>Vandaag</span></button><button class:active={screen === 'vers' || screen === 'bewerken'} on:click={() => navigate('vers')}>⌕<span>Gerechten</span></button><button class:active={screen === 'vriezer'} on:click={() => navigate('vriezer')}>❄<span>Vriezer</span></button><button class:active={screen === 'planner'} on:click={() => navigate('planner')}>☷<span>Planner</span></button><button class:active={screen === 'vrienden'} on:click={() => navigate('vrienden')}><span class="friends-nav-icon" aria-hidden="true">👥</span><span>Vrienden</span></button>
   </nav>
 </div>
 
@@ -695,7 +784,7 @@
 {#if toast}<div class="toast" role="status">{toast}</div>{/if}
 
 {#if saveConfirmation}
-  <div class="modal-backdrop" role="presentation"><div class="modal save-modal" role="dialog" aria-modal="true" aria-labelledby="save-title"><p class="eyebrow">HelpMenu</p><h2 id="save-title">Opslag gereed</h2><p>{saveConfirmation} Deze wijziging is gedeeld met je andere apparaten.</p><div class="choice-actions"><button class="primary" on:click={() => { saveConfirmation = null; navigate('vandaag'); }}>Naar Vandaag</button><button class="secondary" on:click={() => { saveConfirmation = null; navigate('vers'); }}>Gerechten bekijken</button></div></div></div>
+  <div class="modal-backdrop" role="presentation"><div class="modal save-modal" role="dialog" aria-modal="true" aria-labelledby="save-title"><p class="eyebrow">HelpMenu</p><h2 id="save-title">Opslag gereed</h2><p>{saveConfirmation} Deze wijziging is gedeeld met je andere apparaten.</p><div class="choice-actions">{#if screen === 'vrienden'}<button class="primary" on:click={() => saveConfirmation = null}>Terug naar Vrienden</button>{:else}<button class="primary" on:click={() => { saveConfirmation = null; navigate('vandaag'); }}>Naar Vandaag</button><button class="secondary" on:click={() => { saveConfirmation = null; navigate('vers'); }}>Gerechten bekijken</button>{/if}</div></div></div>
 {/if}
 
 {#if passwordDialog}
@@ -711,11 +800,11 @@
   .app-shell { min-height: 100vh; background: #f4f7fc; }
   .sidebar { display: none; }
   main { max-width: 760px; margin: 0 auto; padding: 0 16px 96px; }
-  .topbar { height: 66px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .topbar { min-height: 66px; padding: 10px 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
   .brand, .mobile-brand { border: 0; background: transparent; color: #1253a4; font-size: 19px; font-weight: 760; letter-spacing: -.04em; padding: 8px 0; }
   .brand span, .mobile-brand span { display: inline-grid; place-items: center; width: 24px; height: 24px; background: #1253a4; color: #fff; border-radius: 8px; font-size: 14px; letter-spacing: 0; }
   .account-button { border: 0; background: transparent; color: #1253a4; font-size: 12px; font-weight: 700; }
-  .sync-status { display: flex; align-items: center; gap: 6px; margin-left: auto; border-radius: 999px; background: #e7f1ff; color: #1253a4; padding: 5px 8px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+  .sync-status { display: flex; align-items: center; gap: 6px; margin-left: auto; border-radius: 999px; background: #e7f1ff; color: #1253a4; padding: 5px 8px; font-size: 11px; font-weight: 700; white-space: normal; flex-wrap: wrap; max-width: 100%; }
   .sync-status.warning { background: #fff1d4; color: #8a5811; }
   .sync-status button { border: 0; border-bottom: 1px solid currentColor; background: transparent; color: inherit; padding: 0; font-size: inherit; font-weight: 800; }
   .page { animation: enter .2s ease-out; }
@@ -750,7 +839,7 @@
   .quick-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 13px; }
   .quick-actions button { min-height: 52px; border: 1px dashed #b8c8dc; border-radius: 12px; background: #fff; color: #344c6b; font-size: 13px; text-align: left; padding: 10px; }
   .quick-actions button:last-child { grid-column: 1 / -1; }
-  .bottom-nav { position: fixed; z-index: 4; bottom: 0; left: 0; right: 0; display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid #dce3dc; background: rgba(255,255,255,.96); backdrop-filter: blur(12px); padding: 6px env(safe-area-inset-right) calc(6px + env(safe-area-inset-bottom)) env(safe-area-inset-left); }
+  .bottom-nav { position: fixed; z-index: 4; bottom: 0; left: 0; right: 0; display: grid; grid-template-columns: repeat(5, 1fr); border-top: 1px solid #dce3dc; background: rgba(255,255,255,.96); backdrop-filter: blur(12px); padding: 6px env(safe-area-inset-right) calc(6px + env(safe-area-inset-bottom)) env(safe-area-inset-left); }
   .bottom-nav button { border: 0; background: transparent; color: #66736c; display: grid; gap: 2px; place-items: center; min-height: 48px; font-size: 20px; }
   .bottom-nav button span { font-size: 10px; }
   .bottom-nav button.active { color: #1253a4; font-weight: 750; }
@@ -812,8 +901,17 @@
   .stepper { display: grid; grid-template-columns: 48px 1fr 48px; gap: 8px; }
   .stepper button { border: 1px solid #b8c8dc; border-radius: 10px; background: #fff; color: #1253a4; font-size: 22px; }
   .stepper input { text-align: center; font-weight: 750; }
-  .friend-form { margin-bottom: 29px; border: 1px solid #dce3dc; border-radius: 15px; background: #fff; padding: 14px; }
   .dish-picker { display: flex; flex-wrap: wrap; gap: 7px; }
+  .friend-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .friend-filters { margin-top: 18px; }
+  .friend-preferences { background: #e7f1ff; color: #183a65; border-radius: 12px; padding: 14px; margin: 16px 0; overflow-wrap: anywhere; }
+  .friend-preferences p { margin-bottom: 0; }
+  .friend-form { border: 1px solid #d7e2f0; background: #fff; border-radius: 14px; padding: 16px; margin: 18px 0; }
+  .dinner { flex-wrap: wrap; }
+  .dinner > span:nth-child(2) { flex: 1; min-width: 120px; overflow-wrap: anywhere; }
+  .bottom-nav button .friends-nav-icon { font-size: 22px; }
+  .friends .dish-picker button { white-space: normal; text-align: left; min-height: 44px; }
+  .friends .section-heading { gap: 14px; flex-wrap: wrap; }
   .dinner em { display: block; margin-top: 4px; color: #66736c; font-size: 11px; font-style: normal; }
   .friends-icon { background: #e7f1ff; color: #1253a4; }
   .empty { border: 1px dashed #b8c8dc; border-radius: 12px; color: #66736c; padding: 18px; font-size: 13px; text-align: center; }

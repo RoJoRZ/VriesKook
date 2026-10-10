@@ -75,11 +75,11 @@ Kleur wordt nooit het enige statusmiddel. Elke status krijgt ook tekst, bijvoorb
 
 ### Navigatie
 
-Op telefoon staat onderaan een vaste navigatie met vier hoofdpaden: `Vandaag`, `Planner`, `Vriezer` en `Zoeken`. `Zoeken` opent de gerechtenverzameling (Vers) en geeft tevens toegang tot filters. De overige directe ingangen zijn binnen één tik bereikbaar:
+Op telefoon staat onderaan een vaste navigatie met vijf hoofdpaden: `Vandaag`, `Gerechten`, `Vriezer`, `Planner` en `Vrienden`. Vrienden toont twee poppetjes met het woord Vrienden eronder. Gerechten opent de gerechtenverzameling (Vers) en geeft tevens toegang tot filters. De overige directe ingangen zijn binnen één tik bereikbaar:
 
 - `Nieuw gerecht` staat als actie in Vers en op Vandaag.
 - `Restjes invriezen` staat op Vandaag en Vriezer.
-- `Vrienden` staat in het profiel-/meer-menu, maar blijft eveneens een directe route zonder tussenstappen.
+- `Vrienden` heeft een eigen directe ingang in de onderste navigatie.
 
 Op tablet en desktop verandert de onderste balk in een vaste linkerzijbalk met alle zeven schermen zichtbaar. De actie om een maaltijd te boeken blijft bovenaan de inhoud staan.
 
@@ -321,10 +321,11 @@ Ingevroren op
 
 **Opbouw op telefoon**
 
-1. Titel `Etentjes met vrienden` met actie `Etentje toevoegen`.
-2. Tijdlijn of rustige chronologische lijst, nieuwste bovenaan.
+1. Titel `Etentjes met vrienden` met acties `Etentje toevoegen` en `Gezelschap`.
+2. Gezelschapfilter, zoekveld en datumvolgorde (standaard nieuwste eerst). Bij een geselecteerd gezelschap verschijnt Lusten niet, met Gezelschap wijzigen.
 3. Per item: datum, vrije tekst bij `Wie`, gekozen gerechten en optionele toelichting.
-4. Een compact invoerscherm voor nieuw of bestaand etentje.
+4. Een uitklapbaar formulier voor nieuw of bestaand etentje: gezelschap, datum, gerechten en toelichting. Bij het gekozen gezelschap verschijnt Lusten niet.
+5. Gezelschapformulier met naam en Lusten niet als vrije tekst. Opslaan bevestigt de gedeelde opslag met Terug naar Vrienden.
 
 **Voorbeeldinhoud**
 
